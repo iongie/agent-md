@@ -1,0 +1,790 @@
+project_name: "NusaTravel SaaS Platform"
+domain: "Travel & Transportation"
+date: "2026-05-13"
+
+executive_summary: >
+  NusaTravel adalah platform SaaS B2B2C yang memungkinkan agen perjalanan, operator bus,
+  perusahaan shuttle, dan penyedia jasa transportasi darat di Indonesia & SE Asia untuk
+  mengelola operasional mereka secara end-to-end. Platform ini menyatukan pemesanan tiket
+  multi-moda (bus, kereta, penerbangan), manajemen armada & pengemudi, paket wisata,
+  rental kendaraan, transfer bandara, dan akomodasi hotel dalam satu ekosistem terintegrasi.
+  Keunggulan utama mencakup mekanisme pembayaran fleksibel (DP + pelunasan), dynamic pricing,
+  multi-tenant architecture, dan white-label capability untuk tenant operator.
+
+business_model:
+  type: "B2B2C SaaS"
+  monetization:
+    - "Tiered monthly subscription (Starter, Growth, Enterprise) per tenant"
+    - "Transaction fee (% per booking) untuk tenant tier Starter"
+    - "White-label licensing fee untuk tenant yang ingin branded platform sendiri"
+    - "Commission split model untuk paket wisata & hotel yang dijual via marketplace"
+    - "Add-on module billing (e.g., Fleet GPS tracking, Advanced Analytics)"
+
+rbac_personas:
+  saas_level:
+    - role: "Super Admin"
+      responsibilities: >
+        Mengelola seluruh platform: onboarding tenant, konfigurasi global pricing rules,
+        monitoring health system, manajemen subscription & billing antar tenant,
+        akses audit log penuh, suspend/activate tenant.
+    - role: "SaaS Support Agent"
+      responsibilities: >
+        Memberikan dukungan teknis & operasional kepada tenant, impersonation mode
+        (read-only) untuk troubleshoot masalah tenant, eskalasi tiket.
+    - role: "SaaS Billing Admin"
+      responsibilities: >
+        Mengelola invoice tenant, pembayaran subscription, dispute resolution,
+        laporan revenue platform, refund & credit note kepada tenant.
+    - role: "SaaS Product Manager"
+      responsibilities: >
+        Konfigurasi feature flags per tier, manajemen changelog, announcement platform-wide,
+        A/B testing fitur baru.
+
+  tenant_level:
+    - role: "Tenant Owner"
+      responsibilities: >
+        Pemilik akun bisnis: setup profil perusahaan, white-label branding, manajemen
+        subscription, akses penuh semua modul, undang & kelola user internal.
+    - role: "Operations Manager"
+      responsibilities: >
+        Mengelola jadwal perjalanan, armada, pengemudi, rute, dan kapasitas.
+        Approval pemesanan grup, override pricing, manajemen vendor pihak ketiga.
+    - role: "Finance Staff"
+      responsibilities: >
+        Rekonsiliasi pembayaran, manajemen DP & pelunasan, penerbitan invoice,
+        laporan keuangan harian/bulanan, verifikasi transfer manual.
+    - role: "Booking Staff / CS Agent"
+      responsibilities: >
+        Input pemesanan manual, modifikasi & pembatalan booking atas nama customer,
+        verifikasi dokumen perjalanan, komunikasi dengan customer via in-app chat.
+    - role: "Driver / Operator"
+      responsibilities: >
+        Akses jadwal perjalanan pribadi, konfirmasi keberangkatan, update status
+        perjalanan real-time, laporan insiden, akses manifest penumpang.
+    - role: "Fleet Supervisor"
+      responsibilities: >
+        Monitor posisi armada via GPS, jadwal maintenance kendaraan, assign driver
+        ke kendaraan, laporan utilisasi armada.
+    - role: "Marketing Staff"
+      responsibilities: >
+        Buat & kelola promo/voucher, campaign email/push notification, kelola konten
+        paket wisata, pantau performa campaign.
+
+  end_user_level:
+    - role: "Registered Customer (B2C)"
+      responsibilities: >
+        Cari & pesan tiket, paket wisata, rental kendaraan, atau hotel.
+        Bayar DP atau full payment, kelola booking aktif, tulis ulasan, gunakan poin/voucher.
+    - role: "Corporate Booker (B2B)"
+      responsibilities: >
+        Pesan perjalanan bisnis atas nama perusahaan, akses corporate rate,
+        manajemen travel policy, approval workflow, laporan pengeluaran perjalanan.
+    - role: "Guest (Unauthenticated)"
+      responsibilities: >
+        Browsing produk & harga, cek ketersediaan, booking tanpa registrasi
+        (dengan email konfirmasi), redirect ke registrasi pasca-booking.
+    - role: "Passenger / Traveler"
+      responsibilities: >
+        Akses e-ticket, boarding pass digital, status perjalanan real-time,
+        emergency contact, rating & review pasca-perjalanan.
+
+modules:
+  # ─────────────────────────────────────────────
+  # 1. CORE BOOKING ENGINE
+  # ─────────────────────────────────────────────
+  - module_name: "Core Booking Engine"
+    description: >
+      Mesin pemesanan terpusat yang mendukung multi-moda transportasi dengan
+      inventori real-time, seat selection, dan alur pemesanan yang fleksibel.
+    features:
+      - feature: "One-way & round-trip ticket booking (bus, shuttle, travel darat)"
+        phase: "Phase 1"
+        value_proposition: "Fondasi utama platform; tanpa ini tidak ada transaksi."
+
+      - feature: "Multi-stop & connecting journey booking"
+        phase: "Phase 1"
+        value_proposition: "Mendukung rute kompleks antar kota dengan transfer."
+
+      - feature: "Seat map selection interaktif per kendaraan"
+        phase: "Phase 1"
+        value_proposition: "Meningkatkan konversi dengan pengalaman visual pemilihan kursi."
+
+      - feature: "Real-time seat availability inventory"
+        phase: "Phase 1"
+        value_proposition: "Mencegah overbooking dan meningkatkan kepercayaan customer."
+
+      - feature: "Booking untuk penerbangan (integrasi GDS / OTA API)"
+        phase: "Phase 2"
+        value_proposition: "Ekspansi multi-moda ke penerbangan tanpa bangun sistem tiket sendiri."
+
+      - feature: "Booking kereta api (integrasi KAI Access / INKA API)"
+        phase: "Phase 2"
+        value_proposition: "Lengkap sebagai platform tiket transportasi Indonesia."
+
+      - feature: "Group booking dengan manifest penumpang"
+        phase: "Phase 1"
+        value_proposition: "Melayani segmen korporat & wisata yang pesan banyak kursi sekaligus."
+
+      - feature: "Waitlist management & auto-notify saat seat tersedia"
+        phase: "Phase 2"
+        value_proposition: "Meningkatkan revenue dari demand yang sebelumnya hilang."
+
+      - feature: "Booking modification & cancellation self-service"
+        phase: "Phase 1"
+        value_proposition: "Mengurangi beban CS dan meningkatkan kepuasan pelanggan."
+
+      - feature: "E-ticket & QR code generation otomatis"
+        phase: "Phase 1"
+        value_proposition: "Paperless boarding, efisien untuk operator."
+
+  # ─────────────────────────────────────────────
+  # 2. PAYMENT & FINANCIAL ENGINE
+  # ─────────────────────────────────────────────
+  - module_name: "Payment & Financial Engine"
+    description: >
+      Sistem pembayaran fleksibel yang mendukung DP (down payment), cicilan pelunasan,
+      full payment, multi-channel payment, dan rekonsiliasi otomatis.
+    features:
+      - feature: "Full payment saat checkout"
+        phase: "Phase 1"
+        value_proposition: "Alur pembayaran standar yang wajib tersedia."
+
+      - feature: "Down Payment (DP) booking — bayar sebagian, konfirmasi tempat"
+        phase: "Phase 1"
+        value_proposition: >
+          Diferensiasi utama: customer bisa amankan kursi/paket dengan DP,
+          meningkatkan konversi terutama untuk booking jauh hari.
+
+      - feature: "Pengaturan % minimum DP per produk/rute oleh tenant"
+        phase: "Phase 1"
+        value_proposition: "Fleksibilitas bagi operator mengatur cash flow mereka sendiri."
+
+      - feature: "Reminder otomatis pelunasan sebelum deadline"
+        phase: "Phase 1"
+        value_proposition: "Mengurangi booking yang expired akibat lupa bayar pelunasan."
+
+      - feature: "Auto-cancel booking jika pelunasan melewati deadline"
+        phase: "Phase 1"
+        value_proposition: "Proteksi inventory dan cash flow tenant."
+
+      - feature: "Partial refund & full refund engine dengan approval workflow"
+        phase: "Phase 1"
+        value_proposition: "Standardisasi proses refund, mengurangi dispute manual."
+
+      - feature: "Multi-payment gateway support (Midtrans, Xendit, DOKU, Stripe)"
+        phase: "Phase 1"
+        value_proposition: "Fleksibilitas pembayaran: VA, QRIS, GoPay, OVO, kartu kredit."
+
+      - feature: "Virtual Account (VA) per booking otomatis"
+        phase: "Phase 1"
+        value_proposition: "Rekonsiliasi otomatis, populer di market Indonesia."
+
+      - feature: "Split payment (patungan bayar untuk group booking)"
+        phase: "Phase 2"
+        value_proposition: "Meningkatkan konversi group booking dengan pembayaran bersama."
+
+      - feature: "Paylater / BNPL integration (Kredivo, Akulaku, Atome)"
+        phase: "Phase 2"
+        value_proposition: "Meningkatkan affordability dan konversi segmen muda."
+
+      - feature: "Corporate invoice & net-term billing (Net 30/Net 60)"
+        phase: "Phase 2"
+        value_proposition: "Wajib untuk segmen B2B korporat."
+
+      - feature: "Laporan rekonsiliasi harian & settlement otomatis"
+        phase: "Phase 1"
+        value_proposition: "Efisiensi operasional keuangan tenant."
+
+      - feature: "Commission & markup rule engine per agen/channel"
+        phase: "Phase 1"
+        value_proposition: "Tenant bisa atur margin berbeda untuk tiap saluran penjualan."
+
+  # ─────────────────────────────────────────────
+  # 3. FLEET & DRIVER MANAGEMENT
+  # ─────────────────────────────────────────────
+  - module_name: "Fleet & Driver Management"
+    description: >
+      Pengelolaan armada kendaraan dan sumber daya pengemudi secara end-to-end,
+      dari onboarding hingga jadwal operasional dan maintenance.
+    features:
+      - feature: "Registrasi & profil kendaraan (nomor polisi, kapasitas, fasilitas)"
+        phase: "Phase 1"
+        value_proposition: "Fondasi manajemen armada."
+
+      - feature: "Assignment kendaraan ke jadwal perjalanan"
+        phase: "Phase 1"
+        value_proposition: "Mencegah konflik jadwal dan double-assign kendaraan."
+
+      - feature: "Onboarding & profil pengemudi (SIM, KTP, rekam jejak)"
+        phase: "Phase 1"
+        value_proposition: "Standardisasi data driver untuk kepatuhan dan keamanan."
+
+      - feature: "Jadwal kerja & shift management pengemudi"
+        phase: "Phase 1"
+        value_proposition: "Manajemen SDM operasional yang efisien."
+
+      - feature: "GPS real-time tracking armada"
+        phase: "Phase 2"
+        value_proposition: "Visibilitas lokasi kendaraan untuk operator & customer."
+
+      - feature: "Geofence alert (kendaraan keluar dari rute yang ditentukan)"
+        phase: "Phase 2"
+        value_proposition: "Keamanan dan kepatuhan rute."
+
+      - feature: "Jadwal & histori maintenance kendaraan (servis berkala, STNK, KIR)"
+        phase: "Phase 1"
+        value_proposition: "Mencegah kendaraan bermasalah beroperasi, penting untuk safety."
+
+      - feature: "Notifikasi maintenance jatuh tempo otomatis"
+        phase: "Phase 1"
+        value_proposition: "Proaktif menjaga kondisi armada."
+
+      - feature: "Driver performance scorecard (ketepatan waktu, rating penumpang)"
+        phase: "Phase 2"
+        value_proposition: "Kontrol kualitas layanan dan basis evaluasi driver."
+
+      - feature: "Laporan utilisasi armada (% aktif vs idle per periode)"
+        phase: "Phase 2"
+        value_proposition: "Insight untuk optimasi aset kendaraan."
+
+  # ─────────────────────────────────────────────
+  # 4. TOUR PACKAGE & ITINERARY MANAGEMENT
+  # ─────────────────────────────────────────────
+  - module_name: "Tour Package & Itinerary Management"
+    description: >
+      Alat bagi agen perjalanan untuk membuat, mengelola, dan menjual paket wisata
+      lengkap dengan itinerary, komponen bundling, dan harga yang fleksibel.
+    features:
+      - feature: "Builder paket wisata (nama, deskripsi, durasi, inklusi/eksklusi)"
+        phase: "Phase 1"
+        value_proposition: "Memungkinkan agen membuat produk wisata sendiri tanpa coding."
+
+      - feature: "Day-by-day itinerary editor dengan aktivitas & lokasi"
+        phase: "Phase 1"
+        value_proposition: "Transparansi itinerary meningkatkan kepercayaan pembeli."
+
+      - feature: "Bundling komponen: transportasi + hotel + aktivitas dalam 1 paket"
+        phase: "Phase 1"
+        value_proposition: "One-stop booking meningkatkan nilai transaksi per order."
+
+      - feature: "Harga paket: per orang, per grup, atau private"
+        phase: "Phase 1"
+        value_proposition: "Fleksibilitas pricing untuk berbagai segmen customer."
+
+      - feature: "Minimum & maksimum pax per paket"
+        phase: "Phase 1"
+        value_proposition: "Kontrol kapasitas dan viability paket wisata."
+
+      - feature: "DP booking untuk paket wisata (misal: DP 30%, lunas H-7)"
+        phase: "Phase 1"
+        value_proposition: "Meningkatkan konversi paket premium dengan barrier harga lebih rendah."
+
+      - feature: "Photo gallery & rich content editor untuk halaman paket"
+        phase: "Phase 1"
+        value_proposition: "Presentasi produk profesional tanpa perlu developer."
+
+      - feature: "Paket custom / tailor-made quotation request"
+        phase: "Phase 2"
+        value_proposition: "Melayani segmen premium yang butuh itinerary personal."
+
+      - feature: "Template paket wisata (clone & modifikasi paket yang sudah ada)"
+        phase: "Phase 2"
+        value_proposition: "Efisiensi operasional agen dalam membuat variasi paket."
+
+      - feature: "Availability calendar & ketersediaan slot keberangkatan"
+        phase: "Phase 1"
+        value_proposition: "Customer bisa pilih tanggal sendiri secara mandiri."
+
+  # ─────────────────────────────────────────────
+  # 5. VEHICLE RENTAL MANAGEMENT
+  # ─────────────────────────────────────────────
+  - module_name: "Vehicle Rental Management"
+    description: >
+      Modul khusus untuk bisnis rental kendaraan dengan atau tanpa pengemudi,
+      manajemen kontrak, serta penanganan deposit dan denda.
+    features:
+      - feature: "Katalog kendaraan rental dengan tarif harian/mingguan/bulanan"
+        phase: "Phase 1"
+        value_proposition: "Presentasi inventori rental secara online."
+
+      - feature: "Pemesanan rental dengan/tanpa pengemudi (with/without driver)"
+        phase: "Phase 1"
+        value_proposition: "Melayani dua segmen besar pasar rental."
+
+      - feature: "Booking rental dengan DP, pelunasan sebelum pickup"
+        phase: "Phase 1"
+        value_proposition: "Konsisten dengan mekanisme pembayaran fleksibel platform."
+
+      - feature: "Kontrak digital & e-signature untuk penyewaan"
+        phase: "Phase 1"
+        value_proposition: "Legalitas digital yang cepat dan paperless."
+
+      - feature: "Manajemen deposit: hold, release, atau potong untuk denda"
+        phase: "Phase 1"
+        value_proposition: "Proteksi finansial tenant dari kerusakan atau keterlambatan."
+
+      - feature: "Pengecekan kondisi kendaraan sebelum & sesudah rental (foto bukti)"
+        phase: "Phase 1"
+        value_proposition: "Dokumentasi kondisi untuk mitigasi dispute."
+
+      - feature: "Overtime & late return fee calculation otomatis"
+        phase: "Phase 2"
+        value_proposition: "Otomatisasi penagihan denda keterlambatan."
+
+      - feature: "Blacklist customer bermasalah"
+        phase: "Phase 2"
+        value_proposition: "Proteksi tenant dari penyewa bermasalah berulang."
+
+      - feature: "Integrasi GPS tracker untuk kendaraan yang sedang disewa"
+        phase: "Phase 2"
+        value_proposition: "Keamanan aset selama periode rental."
+
+  # ─────────────────────────────────────────────
+  # 6. AIRPORT TRANSFER & SHUTTLE MANAGEMENT
+  # ─────────────────────────────────────────────
+  - module_name: "Airport Transfer & Shuttle Management"
+    description: >
+      Pengelolaan layanan jemput/antar bandara dan shuttle antar kota dengan
+      penjadwalan dinamis, penugasan pengemudi, dan tracking real-time.
+    features:
+      - feature: "Pemesanan transfer bandara (Arrival & Departure pickup)"
+        phase: "Phase 1"
+        value_proposition: "Produk dengan permintaan tinggi, mudah dioperasikan."
+
+      - feature: "Pilihan tipe kendaraan (sedan, MPV, minibus) berdasarkan jumlah pax"
+        phase: "Phase 1"
+        value_proposition: "Upsell otomatis berdasarkan kebutuhan customer."
+
+      - feature: "Integrasi data penerbangan untuk flight tracking & buffer keterlambatan"
+        phase: "Phase 2"
+        value_proposition: "Auto-adjust waktu jemput jika penerbangan delay, mengurangi komplain."
+
+      - feature: "Shuttle jadwal tetap (fixed departure point & waktu)"
+        phase: "Phase 1"
+        value_proposition: "Operasional shuttle reguler antar kota."
+
+      - feature: "Shuttle on-demand (booking & dispatch real-time)"
+        phase: "Phase 2"
+        value_proposition: "Layanan premium dengan fleksibilitas tinggi."
+
+      - feature: "Manifest penumpang digital untuk setiap run perjalanan"
+        phase: "Phase 1"
+        value_proposition: "Kontrol kapasitas dan keamanan penumpang."
+
+      - feature: "Penugasan pengemudi otomatis berdasarkan ketersediaan & lokasi"
+        phase: "Phase 2"
+        value_proposition: "Efisiensi dispatch tanpa intervensi manual."
+
+      - feature: "Live tracking link untuk dikirim ke customer"
+        phase: "Phase 2"
+        value_proposition: "Transparansi dan keamanan perjalanan."
+
+  # ─────────────────────────────────────────────
+  # 7. HOTEL & ACCOMMODATION MANAGEMENT
+  # ─────────────────────────────────────────────
+  - module_name: "Hotel & Accommodation Management"
+    description: >
+      Modul untuk agen perjalanan mengelola inventori kamar hotel, booking akomodasi,
+      dan bundling dengan paket wisata atau transportasi.
+    features:
+      - feature: "Pendaftaran properti hotel & tipe kamar"
+        phase: "Phase 1"
+        value_proposition: "Tenant agen bisa kelola kontrak hotel sendiri."
+
+      - feature: "Manajemen rate plan & harga musiman"
+        phase: "Phase 1"
+        value_proposition: "Fleksibilitas pricing sesuai high/low season."
+
+      - feature: "Booking kamar individual maupun bulk (group tour)"
+        phase: "Phase 1"
+        value_proposition: "Mendukung paket wisata group yang butuh kamar banyak."
+
+      - feature: "DP booking hotel & pelunasan sebelum check-in"
+        phase: "Phase 1"
+        value_proposition: "Konsisten dengan mekanisme DP platform."
+
+      - feature: "Integrasi OTA eksternal (Booking.com, Agoda, Traveloka) via channel manager"
+        phase: "Phase 2"
+        value_proposition: "Sinkronisasi inventori & harga antar platform, hindari overbooking."
+
+      - feature: "Voucher hotel digital & instruksi check-in otomatis"
+        phase: "Phase 1"
+        value_proposition: "Pengalaman customer yang seamless pasca-booking."
+
+      - feature: "Kebijakan cancellation & no-show fee per properti"
+        phase: "Phase 1"
+        value_proposition: "Proteksi revenue agen dari pembatalan mendadak."
+
+  # ─────────────────────────────────────────────
+  # 8. TENANT & MULTI-TENANCY MANAGEMENT (SaaS Foundation)
+  # ─────────────────────────────────────────────
+  - module_name: "Tenant & Multi-Tenancy Management"
+    description: >
+      Fondasi SaaS platform: isolasi data antar tenant, onboarding bisnis,
+      konfigurasi branding, dan manajemen subscription.
+    features:
+      - feature: "Self-service tenant onboarding & KYB (Know Your Business) verification"
+        phase: "Phase 1"
+        value_proposition: "Memungkinkan bisnis daftar dan aktif tanpa intervensi manual."
+
+      - feature: "Konfigurasi profil bisnis & white-label branding (logo, warna, domain)"
+        phase: "Phase 1"
+        value_proposition: "Tenant tampil dengan identitas brand sendiri."
+
+      - feature: "Manajemen subscription tier (Starter, Growth, Enterprise)"
+        phase: "Phase 1"
+        value_proposition: "Monetisasi platform berbasis nilai fitur."
+
+      - feature: "Feature flag management per tier"
+        phase: "Phase 1"
+        value_proposition: "Kontrol akses fitur berdasarkan paket langganan."
+
+      - feature: "Trial period & grace period management"
+        phase: "Phase 1"
+        value_proposition: "Mengurangi churn dengan jeda sebelum suspend akun."
+
+      - feature: "Tenant data isolation (logical atau physical separation)"
+        phase: "Phase 1"
+        value_proposition: "Keamanan data & kepatuhan regulasi."
+
+      - feature: "Sub-tenant / cabang (Branch Management) untuk enterprise"
+        phase: "Phase 2"
+        value_proposition: "Mendukung perusahaan perjalanan dengan banyak kantor cabang."
+
+      - feature: "Impersonation mode untuk SaaS support"
+        phase: "Phase 2"
+        value_proposition: "Debugging dan support efisien tanpa minta password tenant."
+
+  # ─────────────────────────────────────────────
+  # 9. IDENTITY, ACCESS & SECURITY (IAM)
+  # ─────────────────────────────────────────────
+  - module_name: "Identity, Access & Security (IAM)"
+    description: >
+      Sistem autentikasi dan otorisasi enterprise-grade dengan SSO, 2FA,
+      RBAC granular, dan audit trail lengkap.
+    features:
+      - feature: "Registrasi & login (email/password, Google OAuth)"
+        phase: "Phase 1"
+        value_proposition: "Fondasi akses sistem."
+
+      - feature: "Two-Factor Authentication (TOTP / WhatsApp OTP)"
+        phase: "Phase 1"
+        value_proposition: "Keamanan akun dari unauthorized access."
+
+      - feature: "RBAC granular (permission level per menu/aksi per role)"
+        phase: "Phase 1"
+        value_proposition: "Least privilege access control untuk keamanan data."
+
+      - feature: "SSO via SAML 2.0 / OIDC untuk tenant enterprise"
+        phase: "Phase 2"
+        value_proposition: "Integrasi dengan sistem IAM korporat yang sudah ada."
+
+      - feature: "Session management & forced logout"
+        phase: "Phase 1"
+        value_proposition: "Kontrol keamanan sesi aktif."
+
+      - feature: "Audit log semua aksi user (who, what, when, from where)"
+        phase: "Phase 1"
+        value_proposition: "Kepatuhan regulasi & investigasi insiden."
+
+      - feature: "Password policy enforcement & account lockout"
+        phase: "Phase 1"
+        value_proposition: "Proteksi brute-force attack."
+
+      - feature: "Passkey / WebAuthn authentication support"
+        phase: "Phase 2"
+        value_proposition: "Passwordless experience, lebih aman dan user-friendly."
+
+  # ─────────────────────────────────────────────
+  # 10. PRICING & INVENTORY ENGINE
+  # ─────────────────────────────────────────────
+  - module_name: "Pricing & Inventory Engine"
+    description: >
+      Mesin harga dinamis dan manajemen inventori terpusat untuk semua produk
+      transportasi, rental, dan paket wisata.
+    features:
+      - feature: "Harga dasar per rute / produk / kendaraan"
+        phase: "Phase 1"
+        value_proposition: "Manajemen harga fundamental."
+
+      - feature: "Seasonal pricing & holiday surcharge"
+        phase: "Phase 1"
+        value_proposition: "Maksimalkan revenue di high-demand period."
+
+      - feature: "Dynamic pricing otomatis berdasarkan % kursi terisi"
+        phase: "Phase 2"
+        value_proposition: "Revenue optimization berbasis supply-demand real-time."
+
+      - feature: "Early bird discount (harga lebih murah saat book jauh hari)"
+        phase: "Phase 1"
+        value_proposition: "Insentif pemesanan lebih awal untuk kepastian kapasitas."
+
+      - feature: "Last-minute deal untuk kursi yang belum terjual"
+        phase: "Phase 2"
+        value_proposition: "Hindari revenue loss dari kapasitas kosong."
+
+      - feature: "Child / infant fare configuration"
+        phase: "Phase 1"
+        value_proposition: "Standar industri perjalanan."
+
+      - feature: "Corporate rate & contract pricing per klien"
+        phase: "Phase 2"
+        value_proposition: "Loyalitas dan penetrasi pasar korporat."
+
+      - feature: "Markup & commission rules per channel penjualan"
+        phase: "Phase 1"
+        value_proposition: "Kontrol margin distribusi produk."
+
+  # ─────────────────────────────────────────────
+  # 11. PROMOTIONS & LOYALTY ENGINE
+  # ─────────────────────────────────────────────
+  - module_name: "Promotions & Loyalty Engine"
+    description: >
+      Alat pemasaran untuk menarik dan mempertahankan pelanggan melalui
+      voucher, program loyalitas, dan campaign promosi.
+    features:
+      - feature: "Voucher & promo code (fixed amount, % discount, free service)"
+        phase: "Phase 1"
+        value_proposition: "Alat marketing dasar yang sangat dibutuhkan."
+
+      - feature: "Batas penggunaan voucher (per user, total penggunaan, berlaku sampai)"
+        phase: "Phase 1"
+        value_proposition: "Kontrol biaya promosi."
+
+      - feature: "Flash sale dengan countdown timer"
+        phase: "Phase 2"
+        value_proposition: "Urgency-driven conversion."
+
+      - feature: "Loyalty points system (earn & redeem)"
+        phase: "Phase 2"
+        value_proposition: "Meningkatkan customer lifetime value & retention."
+
+      - feature: "Referral program (customer ajak teman, keduanya dapat reward)"
+        phase: "Phase 2"
+        value_proposition: "Akuisisi pelanggan berbasis word-of-mouth berbiaya rendah."
+
+      - feature: "Cashback campaign management"
+        phase: "Phase 2"
+        value_proposition: "Insentif populer di market Indonesia."
+
+  # ─────────────────────────────────────────────
+  # 12. NOTIFICATIONS & COMMUNICATIONS
+  # ─────────────────────────────────────────────
+  - module_name: "Notifications & Communications"
+    description: >
+      Sistem notifikasi multi-channel untuk komunikasi dengan customer dan
+      internal tenant secara real-time.
+    features:
+      - feature: "Email konfirmasi booking otomatis"
+        phase: "Phase 1"
+        value_proposition: "Standar minimum komunikasi booking."
+
+      - feature: "WhatsApp Business API notification (konfirmasi, reminder, e-ticket)"
+        phase: "Phase 1"
+        value_proposition: "Kanal komunikasi utama di Indonesia; high open rate."
+
+      - feature: "SMS fallback notification"
+        phase: "Phase 1"
+        value_proposition: "Jangkau customer tanpa smartphone atau WhatsApp."
+
+      - feature: "Push notification (mobile & web) untuk status booking"
+        phase: "Phase 2"
+        value_proposition: "Re-engagement customer yang sudah install PWA/app."
+
+      - feature: "Reminder DP & pelunasan H-3, H-1 otomatis"
+        phase: "Phase 1"
+        value_proposition: "Mengurangi booking yang gagal bayar pelunasan."
+
+      - feature: "Notifikasi perubahan jadwal / pembatalan ke semua penumpang"
+        phase: "Phase 1"
+        value_proposition: "Komunikasi krisis yang efisien dan terdokumentasi."
+
+      - feature: "In-app chat antara CS tenant dan customer"
+        phase: "Phase 2"
+        value_proposition: "Sentralisasi komunikasi dan histori percakapan."
+
+      - feature: "Template notifikasi yang bisa dikustomisasi per tenant"
+        phase: "Phase 1"
+        value_proposition: "White-label experience pada komunikasi customer."
+
+  # ─────────────────────────────────────────────
+  # 13. CRM & CUSTOMER MANAGEMENT
+  # ─────────────────────────────────────────────
+  - module_name: "CRM & Customer Management"
+    description: >
+      Pengelolaan data pelanggan, histori transaksi, dan segmentasi
+      untuk meningkatkan retensi dan personalisasi layanan.
+    features:
+      - feature: "Profil customer terpusat (data pribadi, preferensi, histori booking)"
+        phase: "Phase 1"
+        value_proposition: "Single source of truth data pelanggan."
+
+      - feature: "Histori transaksi & status pembayaran per customer"
+        phase: "Phase 1"
+        value_proposition: "Support & CS bisa tangani inquiry dengan cepat."
+
+      - feature: "Segmentasi customer (frekuensi, value, rute favorit)"
+        phase: "Phase 2"
+        value_proposition: "Basis targeted marketing yang lebih efektif."
+
+      - feature: "Customer lifetime value (CLV) tracking"
+        phase: "Phase 2"
+        value_proposition: "Identifikasi customer high-value untuk retention program."
+
+      - feature: "Review & rating management (moderasi & response)"
+        phase: "Phase 1"
+        value_proposition: "Social proof penting untuk konversi."
+
+      - feature: "Complaint & dispute management system"
+        phase: "Phase 1"
+        value_proposition: "Penanganan keluhan terstruktur dan terlacak."
+
+  # ─────────────────────────────────────────────
+  # 14. ANALYTICS & REPORTING
+  # ─────────────────────────────────────────────
+  - module_name: "Analytics & Reporting"
+    description: >
+      Dashboard dan laporan komprehensif untuk pengambilan keputusan bisnis
+      di level tenant maupun platform.
+    features:
+      - feature: "Dashboard operasional real-time (booking hari ini, revenue, occupancy)"
+        phase: "Phase 1"
+        value_proposition: "Visibilitas bisnis setiap hari tanpa perlu buat laporan manual."
+
+      - feature: "Laporan penjualan (per rute, per produk, per channel, per periode)"
+        phase: "Phase 1"
+        value_proposition: "Dasar analisis performa bisnis."
+
+      - feature: "Laporan keuangan (revenue, refund, outstanding DP, settlement)"
+        phase: "Phase 1"
+        value_proposition: "Kebutuhan dasar finance & accounting tenant."
+
+      - feature: "Occupancy report per kendaraan / jadwal"
+        phase: "Phase 1"
+        value_proposition: "Optimasi kapasitas dan schedule."
+
+      - feature: "Customer acquisition & retention funnel analytics"
+        phase: "Phase 2"
+        value_proposition: "Insight marketing untuk tingkatkan ROI promosi."
+
+      - feature: "Export laporan ke Excel / CSV / PDF"
+        phase: "Phase 1"
+        value_proposition: "Kebutuhan dasar untuk audit dan sharing laporan."
+
+      - feature: "Scheduled report via email (harian/mingguan/bulanan)"
+        phase: "Phase 2"
+        value_proposition: "Proactive delivery laporan tanpa harus login."
+
+      - feature: "SaaS-level analytics: tenant growth, GMV, churn rate"
+        phase: "Phase 1"
+        value_proposition: "Super admin monitor kesehatan bisnis platform."
+
+  # ─────────────────────────────────────────────
+  # 15. VENDOR & PARTNER MANAGEMENT
+  # ─────────────────────────────────────────────
+  - module_name: "Vendor & Partner Management"
+    description: >
+      Manajemen mitra penyedia layanan (vendor hotel, operator bus pihak ketiga,
+      provider aktivitas wisata) yang dipasarkan oleh tenant agen.
+    features:
+      - feature: "Onboarding vendor pihak ketiga (profil, kontrak, bank account)"
+        phase: "Phase 1"
+        value_proposition: "Memungkinkan agen pasarkan produk vendor tanpa memiliki aset."
+
+      - feature: "Pengaturan komisi vendor secara fleksibel per produk"
+        phase: "Phase 1"
+        value_proposition: "Model revenue sharing yang jelas antara agen dan vendor."
+
+      - feature: "Vendor portal: vendor input jadwal, stok, harga sendiri"
+        phase: "Phase 2"
+        value_proposition: "Self-service vendor mengurangi beban operasional agen."
+
+      - feature: "Disbursement otomatis ke rekening vendor pasca settlement"
+        phase: "Phase 2"
+        value_proposition: "Otomatisasi pembayaran mitra, meningkatkan kepercayaan vendor."
+
+      - feature: "Vendor performance rating & review"
+        phase: "Phase 2"
+        value_proposition: "Quality control jaringan mitra."
+
+integrations_needed:
+  - category: "Payment Gateway"
+    examples: "Midtrans, Xendit, DOKU, Stripe, Razorpay"
+    purpose: "Pemrosesan pembayaran online, VA, QRIS, e-wallet, kartu kredit"
+
+  - category: "BNPL / Paylater"
+    examples: "Kredivo, Akulaku, Atome, GoPay Pinjam"
+    purpose: "Opsi cicilan untuk meningkatkan affordability booking"
+
+  - category: "WhatsApp Business API"
+    examples: "Twilio, Wati, Vonage, 360dialog"
+    purpose: "Notifikasi booking, reminder DP, e-ticket via WhatsApp"
+
+  - category: "SMS Gateway"
+    examples: "Twilio, Zenziva, Nusasms"
+    purpose: "Notifikasi fallback dan OTP via SMS"
+
+  - category: "Email Service"
+    examples: "SendGrid, Mailgun, Amazon SES"
+    purpose: "Email transaksional dan marketing"
+
+  - category: "Push Notification"
+    examples: "Firebase Cloud Messaging (FCM), OneSignal"
+    purpose: "Push notification mobile & web"
+
+  - category: "GDS / Flight API"
+    examples: "Amadeus, Sabre, Travelport, AirAsia API"
+    purpose: "Inventori & pemesanan tiket penerbangan"
+
+  - category: "KAI (Kereta Api Indonesia) API"
+    examples: "KAI Access API / INKA"
+    purpose: "Pemesanan tiket kereta api nasional"
+
+  - category: "Maps & Routing"
+    examples: "Google Maps Platform, HERE Maps, OpenRouteService"
+    purpose: "Tampilan rute, estimasi waktu tempuh, geocoding pickup point"
+
+  - category: "GPS / Fleet Tracking"
+    examples: "Teltonika, Concox, Meitrack (hardware), Google Maps Fleet API"
+    purpose: "Real-time tracking posisi kendaraan armada"
+
+  - category: "Flight Status API"
+    examples: "FlightAware, AviationStack, FlightRadar24 API"
+    purpose: "Track status penerbangan untuk auto-adjust waktu jemput transfer bandara"
+
+  - category: "Channel Manager (Hotel)"
+    examples: "Siteminder, RateGain, Cloudbeds"
+    purpose: "Sinkronisasi inventori & harga kamar hotel ke OTA eksternal"
+
+  - category: "E-Signature"
+    examples: "DocuSign, PandaDoc, Privy (Indonesia)"
+    purpose: "Kontrak digital untuk rental kendaraan"
+
+  - category: "SSO / Identity Provider"
+    examples: "Google OIDC, Microsoft Azure AD, Okta, Auth0"
+    purpose: "SSO enterprise untuk tenant korporat"
+
+  - category: "Cloud Storage"
+    examples: "AWS S3, Google Cloud Storage, Cloudflare R2"
+    purpose: "Upload foto kendaraan, dokumen, foto kondisi rental"
+
+  - category: "Analytics Platform"
+    examples: "Google Analytics 4, Mixpanel, Amplitude"
+    purpose: "Product analytics & user behavior tracking"
+
+non_functional_requirements:
+  - "Multi-tenancy: data isolation penuh antar tenant (logical atau physical schema separation)"
+  - "99.9% uptime SLA; zero-downtime deployment dengan rolling update strategy"
+  - "API-first architecture: semua fitur ter-expose via RESTful API dan didokumentasi dengan OpenAPI 3.0"
+  - "Webhook support untuk semua event penting (booking.created, payment.received, trip.cancelled)"
+  - "Audit logging untuk semua aksi finansial dan data sensitif (immutable, timestamped)"
+  - "GDPR & UU PDP (Perlindungan Data Pribadi Indonesia) compliance: data minimization, right to deletion"
+  - "End-to-end encryption untuk data sensitif (dokumen KTP, rekening bank, SIM pengemudi)"
+  - "Rate limiting & DDoS protection pada semua API endpoint"
+  - "Horizontal scalability: stateless microservice-ready atau modular monolith yang bisa dipecah"
+  - "Mobile-responsive web application; PWA support untuk offline-capable customer-facing features"
+  - "Maksimal response time API: 95th percentile < 500ms untuk operasi booking"
+  - "Automated backup harian dengan recovery time objective (RTO) < 4 jam"
+  - "Staging environment yang identik dengan production untuk UAT tenant"
+  - "i18n support: Bahasa Indonesia & English sebagai default; arsitektur siap multi-bahasa"
+  - "PCI-DSS awareness: tidak menyimpan raw card data; tokenisasi via payment gateway"

@@ -1,0 +1,1397 @@
+name: "NusaTravel SaaS Platform — Phase 1: MVP"
+version: "1.0.0"
+generated_at: "2026-05-15"
+objective: >
+  Membangun fondasi platform SaaS B2B2C multi-tenant yang memungkinkan agen perjalanan,
+  operator bus, perusahaan shuttle, dan penyedia transportasi darat untuk mengelola
+  operasional end-to-end — mencakup pemesanan tiket bus/shuttle/travel darat (one-way,
+  round-trip, multi-stop), manajemen armada & pengemudi, paket wisata, rental kendaraan,
+  transfer bandara, dan akomodasi hotel — dengan mekanisme pembayaran fleksibel
+  (DP + pelunasan), multi-payment gateway, white-label branding, RBAC granular,
+  dan dashboard operasional real-time.
+
+target_metrics:
+  - "Onboarding 10 tenant dalam 3 bulan pertama pasca-launch"
+  - "Waktu rata-rata pembuatan booking < 3 menit oleh customer mandiri"
+  - "Tingkat keberhasilan pembayaran > 95%"
+  - "Tingkat pelunasan DP tepat waktu > 80%"
+  - "Response time API 95th percentile < 500ms untuk operasi booking"
+  - "Zero critical security incident pada audit kuartal pertama"
+
+phases:
+  - id: "phase-1"
+    name: "MVP"
+    duration: "Month 1-4"
+    modules:
+      - "Core Booking Engine"
+      - "Payment & Financial Engine"
+      - "Fleet & Driver Management"
+      - "Tour Package & Itinerary Management"
+      - "Vehicle Rental Management"
+      - "Airport Transfer & Shuttle Management"
+      - "Hotel & Accommodation Management"
+      - "Tenant & Multi-Tenancy Management"
+      - "Identity, Access & Security (IAM)"
+      - "Pricing & Inventory Engine"
+      - "Promotions & Loyalty Engine"
+      - "Notifications & Communications"
+      - "CRM & Customer Management"
+      - "Analytics & Reporting"
+      - "Vendor & Partner Management"
+
+scope:
+  in_scope:
+    # Core Booking Engine
+    - "One-way & round-trip ticket booking (bus, shuttle, travel darat)"
+    - "Multi-stop & connecting journey booking"
+    - "Seat map selection interaktif per kendaraan"
+    - "Real-time seat availability inventory"
+    - "Group booking dengan manifest penumpang"
+    - "Booking modification & cancellation self-service"
+    - "E-ticket & QR code generation otomatis"
+    # Payment & Financial Engine
+    - "Full payment saat checkout"
+    - "Down Payment (DP) booking dengan konfigurasi % minimum per produk/rute"
+    - "Reminder otomatis pelunasan sebelum deadline"
+    - "Auto-cancel booking jika pelunasan melewati deadline"
+    - "Partial refund & full refund engine dengan approval workflow"
+    - "Multi-payment gateway support (Midtrans, Xendit, DOKU, Stripe)"
+    - "Virtual Account (VA) per booking otomatis"
+    - "Laporan rekonsiliasi harian & settlement otomatis"
+    - "Commission & markup rule engine per agen/channel"
+    # Fleet & Driver Management
+    - "Registrasi & profil kendaraan (nomor polisi, kapasitas, fasilitas)"
+    - "Assignment kendaraan ke jadwal perjalanan"
+    - "Onboarding & profil pengemudi (SIM, KTP, rekam jejak)"
+    - "Jadwal kerja & shift management pengemudi"
+    - "Jadwal & histori maintenance kendaraan (servis berkala, STNK, KIR)"
+    - "Notifikasi maintenance jatuh tempo otomatis"
+    # Tour Package & Itinerary Management
+    - "Builder paket wisata (nama, deskripsi, durasi, inklusi/eksklusi)"
+    - "Day-by-day itinerary editor dengan aktivitas & lokasi"
+    - "Bundling komponen: transportasi + hotel + aktivitas dalam 1 paket"
+    - "Harga paket: per orang, per grup, atau private"
+    - "Minimum & maksimum pax per paket"
+    - "DP booking untuk paket wisata"
+    - "Photo gallery & rich content editor untuk halaman paket"
+    - "Availability calendar & ketersediaan slot keberangkatan"
+    # Vehicle Rental Management
+    - "Katalog kendaraan rental dengan tarif harian/mingguan/bulanan"
+    - "Pemesanan rental dengan/tanpa pengemudi (with/without driver)"
+    - "Booking rental dengan DP, pelunasan sebelum pickup"
+    - "Kontrak digital & e-signature untuk penyewaan"
+    - "Manajemen deposit: hold, release, atau potong untuk denda"
+    - "Pengecekan kondisi kendaraan sebelum & sesudah rental (foto bukti)"
+    # Airport Transfer & Shuttle Management
+    - "Pemesanan transfer bandara (Arrival & Departure pickup)"
+    - "Pilihan tipe kendaraan (sedan, MPV, minibus) berdasarkan jumlah pax"
+    - "Shuttle jadwal tetap (fixed departure point & waktu)"
+    - "Manifest penumpang digital untuk setiap run perjalanan"
+    # Hotel & Accommodation Management
+    - "Pendaftaran properti hotel & tipe kamar"
+    - "Manajemen rate plan & harga musiman"
+    - "Booking kamar individual maupun bulk (group tour)"
+    - "DP booking hotel & pelunasan sebelum check-in"
+    - "Voucher hotel digital & instruksi check-in otomatis"
+    - "Kebijakan cancellation & no-show fee per properti"
+    # Tenant & Multi-Tenancy Management
+    - "Self-service tenant onboarding & KYB (Know Your Business) verification"
+    - "Konfigurasi profil bisnis & white-label branding (logo, warna, domain)"
+    - "Manajemen subscription tier (Starter, Growth, Enterprise)"
+    - "Feature flag management per tier"
+    - "Trial period & grace period management"
+    - "Tenant data isolation (logical separation)"
+    # Identity, Access & Security (IAM)
+    - "Registrasi & login (email/password, Google OAuth)"
+    - "Two-Factor Authentication (TOTP / WhatsApp OTP)"
+    - "RBAC granular (permission level per menu/aksi per role)"
+    - "Session management & forced logout"
+    - "Audit log semua aksi user (who, what, when, from where)"
+    - "Password policy enforcement & account lockout"
+    # Pricing & Inventory Engine
+    - "Harga dasar per rute/produk/kendaraan"
+    - "Seasonal pricing & holiday surcharge"
+    - "Early bird discount (harga lebih murah saat book jauh hari)"
+    - "Child/infant fare configuration"
+    - "Markup & commission rules per channel penjualan"
+    # Promotions & Loyalty Engine
+    - "Voucher & promo code (fixed amount, % discount, free service)"
+    - "Batas penggunaan voucher (per user, total penggunaan, berlaku sampai)"
+    # Notifications & Communications
+    - "Email konfirmasi booking otomatis"
+    - "WhatsApp Business API notification (konfirmasi, reminder, e-ticket)"
+    - "SMS fallback notification"
+    - "Reminder DP & pelunasan H-3, H-1 otomatis"
+    - "Notifikasi perubahan jadwal / pembatalan ke semua penumpang"
+    - "Template notifikasi yang bisa dikustomisasi per tenant"
+    # CRM & Customer Management
+    - "Profil customer terpusat (data pribadi, preferensi, histori booking)"
+    - "Histori transaksi & status pembayaran per customer"
+    - "Review & rating management (moderasi & response)"
+    - "Complaint & dispute management system"
+    # Analytics & Reporting
+    - "Dashboard operasional real-time (booking hari ini, revenue, occupancy)"
+    - "Laporan penjualan (per rute, per produk, per channel, per periode)"
+    - "Laporan keuangan (revenue, refund, outstanding DP, settlement)"
+    - "Occupancy report per kendaraan/jadwal"
+    - "Export laporan ke Excel/CSV/PDF"
+    - "SaaS-level analytics: tenant growth, GMV, churn rate"
+    # Vendor & Partner Management
+    - "Onboarding vendor pihak ketiga (profil, kontrak, bank account)"
+    - "Pengaturan komisi vendor secara fleksibel per produk"
+
+  out_of_scope:
+    - "Booking penerbangan via GDS/OTA API (Phase 2)"
+    - "Booking kereta api via KAI Access/INKA API (Phase 2)"
+    - "Waitlist management (Phase 2)"
+    - "Split payment untuk group booking (Phase 2)"
+    - "Paylater/BNPL integration (Phase 2)"
+    - "Corporate invoice & net-term billing (Phase 2)"
+    - "GPS real-time tracking armada & geofence alert (Phase 2)"
+    - "Driver performance scorecard & laporan utilisasi armada (Phase 2)"
+    - "Paket custom/tailor-made quotation request (Phase 2)"
+    - "Template paket wisata clone & modifikasi (Phase 2)"
+    - "Overtime & late return fee calculation otomatis (Phase 2)"
+    - "Blacklist customer bermasalah (Phase 2)"
+    - "Integrasi GPS tracker kendaraan rental (Phase 2)"
+    - "Integrasi data penerbangan untuk auto-adjust transfer bandara (Phase 2)"
+    - "Shuttle on-demand booking & dispatch real-time (Phase 2)"
+    - "Penugasan pengemudi otomatis (Phase 2)"
+    - "Live tracking link untuk customer (Phase 2)"
+    - "Integrasi OTA eksternal via channel manager hotel (Phase 2)"
+    - "Sub-tenant/branch management untuk enterprise (Phase 2)"
+    - "Impersonation mode untuk SaaS support (Phase 2)"
+    - "SSO via SAML 2.0/OIDC untuk tenant enterprise (Phase 2)"
+    - "Passkey/WebAuthn authentication (Phase 2)"
+    - "Dynamic pricing otomatis berdasarkan % kursi terisi (Phase 2)"
+    - "Last-minute deal (Phase 2)"
+    - "Corporate rate & contract pricing (Phase 2)"
+    - "Flash sale dengan countdown timer (Phase 2)"
+    - "Loyalty points system (Phase 2)"
+    - "Referral program & cashback campaign (Phase 2)"
+    - "Push notification mobile & web (Phase 2)"
+    - "In-app chat CS tenant dan customer (Phase 2)"
+    - "Segmentasi customer & CLV tracking (Phase 2)"
+    - "Customer acquisition & retention funnel analytics (Phase 2)"
+    - "Scheduled report via email (Phase 2)"
+    - "Vendor portal self-service (Phase 2)"
+    - "Disbursement otomatis ke rekening vendor (Phase 2)"
+    - "Vendor performance rating & review (Phase 2)"
+    - "Native mobile application (iOS/Android)"
+    - "Hardware GPS tracker sendiri"
+    - "Payment gateway sendiri"
+    - "Marketplace publik antar-tenant"
+    - "Modul HR/Payroll pengemudi"
+    - "Akuntansi & ERP terintegrasi"
+    - "Program asuransi perjalanan"
+    - "Sistem ticketing event/konser"
+
+roles:
+  - id: "super_admin"
+    name: "Super Admin"
+    description: >
+      Admin level SaaS: mengelola seluruh platform, onboarding tenant,
+      konfigurasi global pricing rules, monitoring system health, manajemen
+      subscription & billing antar tenant, audit log penuh, suspend/activate tenant.
+
+  - id: "saas_support_agent"
+    name: "SaaS Support Agent"
+    description: >
+      Memberikan dukungan teknis & operasional kepada tenant; eskalasi tiket;
+      akses read-only untuk troubleshooting.
+
+  - id: "saas_billing_admin"
+    name: "SaaS Billing Admin"
+    description: >
+      Mengelola invoice tenant, pembayaran subscription, dispute resolution,
+      laporan revenue platform, refund & credit note kepada tenant.
+
+  - id: "saas_product_manager"
+    name: "SaaS Product Manager"
+    description: >
+      Konfigurasi feature flags per tier, manajemen changelog, announcement
+      platform-wide.
+
+  - id: "tenant_owner"
+    name: "Tenant Owner"
+    description: >
+      Pemilik akun bisnis: setup profil perusahaan, white-label branding,
+      manajemen subscription, akses penuh semua modul, undang & kelola user internal.
+
+  - id: "operations_manager"
+    name: "Operations Manager"
+    description: >
+      Mengelola jadwal perjalanan, armada, pengemudi, rute, dan kapasitas.
+      Approval pemesanan grup, override pricing, manajemen vendor pihak ketiga.
+
+  - id: "finance_staff"
+    name: "Finance Staff"
+    description: >
+      Rekonsiliasi pembayaran, manajemen DP & pelunasan, penerbitan invoice,
+      laporan keuangan harian/bulanan, verifikasi transfer manual.
+
+  - id: "booking_staff_cs"
+    name: "Booking Staff / CS Agent"
+    description: >
+      Input pemesanan manual, modifikasi & pembatalan booking atas nama customer,
+      verifikasi dokumen perjalanan, komunikasi dengan customer.
+
+  - id: "driver_operator"
+    name: "Driver / Operator"
+    description: >
+      Akses jadwal perjalanan pribadi, konfirmasi keberangkatan, update status
+      perjalanan real-time, laporan insiden, akses manifest penumpang.
+
+  - id: "fleet_supervisor"
+    name: "Fleet Supervisor"
+    description: >
+      Monitor jadwal maintenance kendaraan, assign driver ke kendaraan,
+      notifikasi maintenance jatuh tempo.
+
+  - id: "marketing_staff"
+    name: "Marketing Staff"
+    description: >
+      Buat & kelola promo/voucher, campaign email, kelola konten paket wisata,
+      pantau performa campaign.
+
+  - id: "registered_customer"
+    name: "Registered Customer (B2C)"
+    description: >
+      Cari & pesan tiket, paket wisata, rental kendaraan, atau hotel.
+      Bayar DP atau full payment, kelola booking aktif, tulis ulasan, gunakan voucher.
+
+  - id: "corporate_booker"
+    name: "Corporate Booker (B2B)"
+    description: >
+      Pesan perjalanan bisnis atas nama perusahaan, akses corporate rate,
+      manajemen travel policy, laporan pengeluaran perjalanan.
+
+  - id: "guest"
+    name: "Guest (Unauthenticated)"
+    description: >
+      Browsing produk & harga, cek ketersediaan, booking tanpa registrasi
+      dengan email konfirmasi, redirect ke registrasi pasca-booking.
+
+  - id: "passenger_traveler"
+    name: "Passenger / Traveler"
+    description: >
+      Akses e-ticket, boarding pass digital, status perjalanan real-time,
+      emergency contact, rating & review pasca-perjalanan.
+
+data_models:
+  - entity_name: "User"
+    description: "Global identity account untuk semua persona (SaaS staff, tenant user, end customer)."
+    key_attributes:
+      - "id (ULID, PK)"
+      - "email (unique)"
+      - "phone_e164 (unique, nullable)"
+      - "password_hash"
+      - "status (active/suspended/locked/deleted)"
+      - "email_verified_at"
+      - "failed_login_attempts"
+      - "locked_until"
+      - "last_login_at"
+      - "tenant_id (nullable — null berarti SaaS-level user)"
+
+  - entity_name: "Tenant"
+    description: "Entitas bisnis yang menggunakan platform (agen perjalanan, operator bus, dll)."
+    key_attributes:
+      - "id (ULID, PK)"
+      - "tenant_code (unique, slug)"
+      - "legal_name"
+      - "business_type"
+      - "kyb_status (pending/approved/rejected)"
+      - "subscription_tier (starter/growth/enterprise)"
+      - "subscription_status (trial/active/grace/suspended)"
+      - "white_label_config (logo_url, primary_color, custom_domain)"
+      - "trial_ends_at"
+      - "grace_ends_at"
+
+  - entity_name: "Role"
+    description: "Peran dalam sistem, bisa global (SaaS) atau tenant-scoped."
+    key_attributes:
+      - "id (ULID, PK)"
+      - "tenant_id (nullable — null = global SaaS role)"
+      - "role_code (unique per tenant)"
+      - "role_name"
+      - "is_system_role"
+
+  - entity_name: "Permission"
+    description: "Izin atomik untuk resource dan aksi tertentu."
+    key_attributes:
+      - "id (ULID, PK)"
+      - "permission_code (unique, e.g., booking.read, fleet.update)"
+      - "resource"
+      - "action (create/read/update/delete/approve/export/manage)"
+
+  - entity_name: "TripSchedule"
+    description: "Jadwal perjalanan transportasi darat (bus, shuttle, travel)."
+    key_attributes:
+      - "id (ULID, PK)"
+      - "tenant_id (FK)"
+      - "origin_location_id (FK)"
+      - "destination_location_id (FK)"
+      - "departure_at"
+      - "arrival_at"
+      - "vehicle_id (FK)"
+      - "driver_id (FK)"
+      - "total_seats"
+      - "available_seats"
+      - "status (scheduled/in_progress/completed/cancelled)"
+      - "base_price"
+
+  - entity_name: "Booking"
+    description: "Header pemesanan yang menyatukan satu atau lebih item perjalanan."
+    key_attributes:
+      - "id (ULID, PK)"
+      - "tenant_id (FK)"
+      - "booking_code (unique, human-readable)"
+      - "customer_id (FK, nullable untuk guest)"
+      - "guest_email (nullable)"
+      - "booking_status (draft/dp_paid/confirmed/cancelled/auto_cancelled)"
+      - "payment_mode (full/dp)"
+      - "dp_percentage"
+      - "dp_amount"
+      - "total_amount"
+      - "settlement_deadline"
+      - "sales_channel_id (FK)"
+
+  - entity_name: "BookingItem"
+    description: "Item individual dalam satu booking (tiket, paket, rental, hotel)."
+    key_attributes:
+      - "id (ULID, PK)"
+      - "booking_id (FK)"
+      - "item_type (trip/tour/rental/hotel/transfer)"
+      - "reference_id (FK ke produk terkait)"
+      - "quantity"
+      - "unit_price"
+      - "subtotal"
+
+  - entity_name: "Passenger"
+    description: "Data penumpang dalam booking (manifest)."
+    key_attributes:
+      - "id (ULID, PK)"
+      - "booking_id (FK)"
+      - "booking_item_id (FK)"
+      - "full_name"
+      - "id_type (ktp/passport/sim)"
+      - "id_number"
+      - "seat_code"
+      - "fare_type (adult/child/infant)"
+      - "ticket_qr_code"
+
+  - entity_name: "PaymentIntent"
+    description: "Intensi pembayaran untuk booking (DP, pelunasan, full payment)."
+    key_attributes:
+      - "id (ULID, PK)"
+      - "booking_id (FK)"
+      - "intent_type (dp/settlement/full/deposit_hold/deposit_release)"
+      - "gateway_code"
+      - "method_type (va/qris/ewallet/credit_card)"
+      - "amount"
+      - "status (pending/paid/expired/failed)"
+      - "va_number (nullable)"
+      - "expires_at"
+
+  - entity_name: "PaymentTransaction"
+    description: "Transaksi pembayaran aktual yang diterima dari gateway."
+    key_attributes:
+      - "id (ULID, PK)"
+      - "payment_intent_id (FK)"
+      - "gateway_transaction_id"
+      - "amount_received"
+      - "status (confirmed/failed/refunded)"
+      - "paid_at"
+      - "raw_webhook_payload"
+
+  - entity_name: "Refund"
+    description: "Pengajuan dan pemrosesan refund."
+    key_attributes:
+      - "id (ULID, PK)"
+      - "booking_id (FK)"
+      - "refund_type (partial/full)"
+      - "refund_amount"
+      - "reason"
+      - "status (requested/approved/rejected/completed)"
+      - "approved_by (FK user)"
+      - "approved_at"
+
+  - entity_name: "Vehicle"
+    description: "Kendaraan dalam armada tenant."
+    key_attributes:
+      - "id (ULID, PK)"
+      - "tenant_id (FK)"
+      - "plate_number (unique per tenant)"
+      - "vehicle_type (bus/minibus/mpv/sedan)"
+      - "capacity"
+      - "facilities (ac, toilet, entertainment, wifi)"
+      - "status (active/maintenance/inactive)"
+      - "stnk_expiry"
+      - "kir_expiry"
+
+  - entity_name: "Driver"
+    description: "Pengemudi yang terdaftar di tenant."
+    key_attributes:
+      - "id (ULID, PK)"
+      - "tenant_id (FK)"
+      - "user_id (FK, nullable — link ke akun login)"
+      - "full_name"
+      - "sim_number"
+      - "sim_expiry"
+      - "ktp_number"
+      - "status (active/inactive/suspended)"
+      - "track_record_notes"
+
+  - entity_name: "TourPackage"
+    description: "Paket wisata yang dijual oleh tenant agen."
+    key_attributes:
+      - "id (ULID, PK)"
+      - "tenant_id (FK)"
+      - "package_name"
+      - "description"
+      - "duration_days"
+      - "inclusions"
+      - "exclusions"
+      - "pricing_type (per_person/per_group/private)"
+      - "price"
+      - "min_pax"
+      - "max_pax"
+      - "dp_percentage"
+      - "status (draft/published/archived)"
+
+  - entity_name: "HotelProperty"
+    description: "Properti hotel yang dikelola tenant agen."
+    key_attributes:
+      - "id (ULID, PK)"
+      - "tenant_id (FK)"
+      - "property_name"
+      - "address"
+      - "star_rating"
+      - "cancellation_policy"
+      - "no_show_fee_percentage"
+
+  - entity_name: "HotelRoomType"
+    description: "Tipe kamar dalam properti hotel."
+    key_attributes:
+      - "id (ULID, PK)"
+      - "property_id (FK)"
+      - "room_type_name"
+      - "base_price"
+      - "capacity"
+      - "total_rooms"
+      - "available_rooms"
+
+  - entity_name: "Voucher"
+    description: "Kode promo/voucher yang dibuat tenant."
+    key_attributes:
+      - "id (ULID, PK)"
+      - "tenant_id (FK)"
+      - "voucher_code (unique per tenant)"
+      - "discount_type (fixed/percentage)"
+      - "discount_value"
+      - "max_usage_total"
+      - "max_usage_per_user"
+      - "valid_from"
+      - "valid_until"
+      - "status (active/expired/disabled)"
+
+  - entity_name: "Vendor"
+    description: "Mitra penyedia layanan pihak ketiga."
+    key_attributes:
+      - "id (ULID, PK)"
+      - "tenant_id (FK)"
+      - "vendor_name"
+      - "contact_info"
+      - "bank_account_info"
+      - "commission_percentage"
+      - "status (active/inactive)"
+
+  - entity_name: "AuditLog"
+    description: "Log audit immutable untuk semua aksi user."
+    key_attributes:
+      - "id (ULID, PK)"
+      - "user_id (FK)"
+      - "tenant_id (FK, nullable)"
+      - "action"
+      - "resource_type"
+      - "resource_id"
+      - "old_values (JSONB)"
+      - "new_values (JSONB)"
+      - "ip_address"
+      - "user_agent"
+      - "created_at"
+
+state_machines:
+  - workflow: "Booking Lifecycle"
+    transitions:
+      - "Draft -> DP_Paid (setelah DP dibayar)"
+      - "DP_Paid -> Confirmed (setelah pelunasan diterima)"
+      - "Draft -> Confirmed (jika full payment langsung lunas)"
+      - "DP_Paid -> Auto_Cancelled (jika pelunasan melewati deadline)"
+      - "Draft -> Cancelled (pembatalan oleh customer/CS sebelum pembayaran)"
+      - "DP_Paid -> Cancelled (pembatalan dengan refund setelah DP)"
+      - "Confirmed -> Cancelled (pembatalan dengan refund setelah lunas)"
+
+  - workflow: "Payment Intent Lifecycle"
+    transitions:
+      - "Pending -> Paid (webhook gateway mengkonfirmasi pembayaran)"
+      - "Pending -> Expired (melewati batas waktu pembayaran)"
+      - "Pending -> Failed (gateway melaporkan kegagalan)"
+      - "Paid -> Refunded (setelah refund disetujui dan diproses)"
+
+  - workflow: "Refund Lifecycle"
+    transitions:
+      - "Requested -> Approved (setelah approval oleh tenant_owner/operations_manager)"
+      - "Requested -> Rejected (ditolak oleh approver)"
+      - "Approved -> Completed (setelah gateway memproses refund)"
+
+  - workflow: "Tenant KYB Lifecycle"
+    transitions:
+      - "Pending -> Approved (setelah verifikasi dokumen oleh Super Admin)"
+      - "Pending -> Rejected (dokumen tidak memenuhi syarat)"
+      - "Rejected -> Pending (tenant mengunggah ulang dokumen)"
+
+  - workflow: "Tenant Subscription Lifecycle"
+    transitions:
+      - "Trial -> Active (konversi ke subscription berbayar)"
+      - "Active -> Grace (pembayaran subscription terlambat)"
+      - "Grace -> Active (pembayaran diterima dalam masa grace)"
+      - "Grace -> Suspended (melewati masa grace tanpa pembayaran)"
+      - "Suspended -> Active (pembayaran diterima setelah suspend)"
+      - "Active -> Cancelled (tenant memutuskan berhenti berlangganan)"
+
+  - workflow: "Vehicle Lifecycle"
+    transitions:
+      - "Active -> Maintenance (kendaraan masuk jadwal servis)"
+      - "Maintenance -> Active (servis selesai, kendaraan siap operasi)"
+      - "Active -> Inactive (kendaraan dinonaktifkan permanen)"
+
+user_stories:
+  # ─── Core Booking Engine ───
+  - id: "US-BKG-1"
+    phase: "phase-1"
+    role: "registered_customer"
+    goal: "mencari dan memesan tiket one-way atau round-trip (bus, shuttle, travel darat)"
+    benefit: "saya dapat mengamankan tempat duduk saya dengan mudah secara mandiri"
+
+  - id: "US-BKG-2"
+    phase: "phase-1"
+    role: "registered_customer"
+    goal: "memilih kursi dari seat map interaktif kendaraan"
+    benefit: "saya dapat memilih posisi kursi yang saya inginkan sebelum membayar"
+
+  - id: "US-BKG-3"
+    phase: "phase-1"
+    role: "guest"
+    goal: "melakukan booking tiket tanpa harus mendaftar terlebih dahulu"
+    benefit: "saya dapat menyelesaikan pemesanan dengan cepat menggunakan konfirmasi email"
+
+  - id: "US-BKG-4"
+    phase: "phase-1"
+    role: "booking_staff_cs"
+    goal: "menginput pemesanan secara manual atas nama customer"
+    benefit: "saya dapat membantu customer yang tidak dapat memesan sendiri secara online"
+
+  - id: "US-BKG-5"
+    phase: "phase-1"
+    role: "registered_customer"
+    goal: "memodifikasi atau membatalkan booking secara mandiri"
+    benefit: "saya dapat mengelola perubahan perjalanan tanpa harus menghubungi CS"
+
+  - id: "US-BKG-6"
+    phase: "phase-1"
+    role: "operations_manager"
+    goal: "mengelola group booking beserta manifest penumpangnya"
+    benefit: "saya dapat melayani segmen korporat dan wisata yang memesan banyak kursi sekaligus"
+
+  - id: "US-BKG-7"
+    phase: "phase-1"
+    role: "passenger_traveler"
+    goal: "menerima e-ticket dan QR code yang dibuat otomatis setelah booking dikonfirmasi"
+    benefit: "saya dapat melakukan boarding secara paperless dan efisien"
+
+  # ─── Payment & Financial Engine ───
+  - id: "US-PAY-1"
+    phase: "phase-1"
+    role: "registered_customer"
+    goal: "membayar Down Payment untuk mengamankan pemesanan saya"
+    benefit: "saya dapat mereservasi tempat tanpa harus membayar penuh di muka"
+
+  - id: "US-PAY-2"
+    phase: "phase-1"
+    role: "tenant_owner"
+    goal: "mengkonfigurasi persentase minimum DP per produk atau rute"
+    benefit: "saya dapat mengatur kebutuhan arus kas bisnis saya sendiri"
+
+  - id: "US-PAY-3"
+    phase: "phase-1"
+    role: "registered_customer"
+    goal: "menerima reminder otomatis untuk pelunasan sebelum deadline"
+    benefit: "saya tidak akan kehilangan pemesanan akibat lupa membayar pelunasan"
+
+  - id: "US-PAY-4"
+    phase: "phase-1"
+    role: "registered_customer"
+    goal: "membayar menggunakan berbagai metode (VA, QRIS, e-wallet, kartu kredit)"
+    benefit: "saya dapat memilih metode pembayaran yang paling nyaman bagi saya"
+
+  - id: "US-PAY-5"
+    phase: "phase-1"
+    role: "finance_staff"
+    goal: "memproses refund parsial atau penuh melalui approval workflow"
+    benefit: "saya dapat menangani pembatalan secara terstandarisasi dan terdokumentasi"
+
+  - id: "US-PAY-6"
+    phase: "phase-1"
+    role: "finance_staff"
+    goal: "melihat laporan rekonsiliasi harian dan settlement otomatis"
+    benefit: "saya dapat memverifikasi keakuratan keuangan secara efisien setiap hari"
+
+  - id: "US-PAY-7"
+    phase: "phase-1"
+    role: "tenant_owner"
+    goal: "mengkonfigurasi aturan markup dan komisi per channel penjualan"
+    benefit: "saya dapat mengontrol margin distribusi produk di setiap saluran penjualan"
+
+  # ─── Fleet & Driver Management ───
+  - id: "US-FLT-1"
+    phase: "phase-1"
+    role: "operations_manager"
+    goal: "mendaftarkan dan mengelola profil kendaraan (nomor polisi, kapasitas, fasilitas)"
+    benefit: "saya dapat memiliki inventaris armada yang akurat sebagai dasar operasional"
+
+  - id: "US-FLT-2"
+    phase: "phase-1"
+    role: "operations_manager"
+    goal: "menugaskan kendaraan ke jadwal perjalanan tertentu"
+    benefit: "saya dapat mencegah konflik jadwal dan double-assignment kendaraan"
+
+  - id: "US-FLT-3"
+    phase: "phase-1"
+    role: "operations_manager"
+    goal: "melakukan onboarding dan mengelola profil pengemudi (SIM, KTP, rekam jejak)"
+    benefit: "saya dapat memastikan kepatuhan standar keamanan dalam rekrutmen pengemudi"
+
+  - id: "US-FLT-4"
+    phase: "phase-1"
+    role: "fleet_supervisor"
+    goal: "menjadwalkan maintenance kendaraan dan menerima notifikasi jatuh tempo"
+    benefit: "saya dapat mencegah kendaraan bermasalah beroperasi demi keselamatan penumpang"
+
+  - id: "US-FLT-5"
+    phase: "phase-1"
+    role: "driver_operator"
+    goal: "mengakses jadwal perjalanan pribadi dan memperbarui status perjalanan secara real-time"
+    benefit: "saya dapat mengelola hari kerja saya dan memberi visibilitas kepada operator"
+
+  # ─── Tour Package & Itinerary Management ───
+  - id: "US-TOUR-1"
+    phase: "phase-1"
+    role: "tenant_owner"
+    goal: "membuat paket wisata lengkap dengan itinerary harian, komponen bundling, dan harga fleksibel"
+    benefit: "saya dapat menjual produk wisata sendiri tanpa memerlukan kemampuan teknis"
+
+  - id: "US-TOUR-2"
+    phase: "phase-1"
+    role: "registered_customer"
+    goal: "memesan paket wisata dengan opsi Down Payment"
+    benefit: "saya dapat mengamankan slot paket premium dengan barrier harga awal yang lebih rendah"
+
+  - id: "US-TOUR-3"
+    phase: "phase-1"
+    role: "marketing_staff"
+    goal: "menambahkan photo gallery dan rich content pada halaman paket wisata"
+    benefit: "saya dapat mempresentasikan produk secara profesional tanpa memerlukan developer"
+
+  - id: "US-TOUR-4"
+    phase: "phase-1"
+    role: "registered_customer"
+    goal: "melihat availability calendar dan memilih tanggal keberangkatan paket wisata secara mandiri"
+    benefit: "saya dapat menemukan dan memilih slot yang tersedia tanpa harus menghubungi agen"
+
+  # ─── Vehicle Rental Management ───
+  - id: "US-RNT-1"
+    phase: "phase-1"
+    role: "registered_customer"
+    goal: "memesan kendaraan rental dengan atau tanpa pengemudi menggunakan skema DP"
+    benefit: "saya dapat memilih opsi rental yang sesuai kebutuhan dengan pembayaran yang fleksibel"
+
+  - id: "US-RNT-2"
+    phase: "phase-1"
+    role: "booking_staff_cs"
+    goal: "membuat kontrak digital dengan e-signature untuk penyewaan kendaraan"
+    benefit: "saya dapat menyelesaikan legalitas penyewaan secara cepat dan paperless"
+
+  - id: "US-RNT-3"
+    phase: "phase-1"
+    role: "finance_staff"
+    goal: "mengelola deposit rental — hold, release, atau potong untuk denda kerusakan"
+    benefit: "saya dapat melindungi bisnis dari kerugian finansial akibat kerusakan atau keterlambatan"
+
+  - id: "US-RNT-4"
+    phase: "phase-1"
+    role: "booking_staff_cs"
+    goal: "mendokumentasikan kondisi kendaraan sebelum dan sesudah rental dengan foto"
+    benefit: "saya dapat memitigasi dispute dengan bukti kondisi kendaraan yang jelas"
+
+  # ─── Airport Transfer & Shuttle Management ───
+  - id: "US-XFER-1"
+    phase: "phase-1"
+    role: "registered_customer"
+    goal: "memesan transfer bandara (arrival atau departure) dengan pilihan tipe kendaraan"
+    benefit: "saya dapat mengatur transportasi dari/ke bandara sesuai jumlah penumpang dan anggaran"
+
+  - id: "US-XFER-2"
+    phase: "phase-1"
+    role: "operations_manager"
+    goal: "mengelola jadwal shuttle tetap dengan titik keberangkatan dan waktu yang terdefinisi"
+    benefit: "saya dapat mengoperasikan layanan shuttle reguler antar kota secara terstruktur"
+
+  - id: "US-XFER-3"
+    phase: "phase-1"
+    role: "passenger_traveler"
+    goal: "mengakses manifest penumpang digital untuk setiap run perjalanan"
+    benefit: "saya dapat memverifikasi data perjalanan saya dan merasa aman selama transit"
+
+  # ─── Hotel & Accommodation Management ───
+  - id: "US-HTL-1"
+    phase: "phase-1"
+    role: "tenant_owner"
+    goal: "mendaftarkan properti hotel beserta tipe kamar dan rate plan musiman"
+    benefit: "saya dapat mengelola inventori akomodasi sendiri tanpa bergantung pada pihak ketiga"
+
+  - id: "US-HTL-2"
+    phase: "phase-1"
+    role: "registered_customer"
+    goal: "memesan kamar hotel dengan Down Payment dan melunasi sebelum check-in"
+    benefit: "saya dapat mengamankan akomodasi secara fleksibel tanpa pembayaran penuh di muka"
+
+  - id: "US-HTL-3"
+    phase: "phase-1"
+    role: "finance_staff"
+    goal: "mengkonfigurasi kebijakan cancellation dan no-show fee per properti hotel"
+    benefit: "saya dapat melindungi revenue agen dari pembatalan mendadak oleh customer"
+
+  # ─── Tenant & Multi-Tenancy Management ───
+  - id: "US-TNT-1"
+    phase: "phase-1"
+    role: "tenant_owner"
+    goal: "mendaftarkan bisnis saya secara mandiri dan menyelesaikan verifikasi KYB"
+    benefit: "saya dapat mulai menggunakan platform tanpa memerlukan intervensi manual dari tim SaaS"
+
+  - id: "US-TNT-2"
+    phase: "phase-1"
+    role: "tenant_owner"
+    goal: "mengkonfigurasi white-label branding (logo, warna, custom domain)"
+    benefit: "saya dapat menampilkan platform kepada customer dengan identitas brand sendiri"
+
+  - id: "US-TNT-3"
+    phase: "phase-1"
+    role: "super_admin"
+    goal: "mengelola tier subscription tenant dan mengkonfigurasi feature flag per tier"
+    benefit: "saya dapat mengontrol akses fitur berdasarkan paket berlangganan yang dipilih tenant"
+
+  - id: "US-TNT-4"
+    phase: "phase-1"
+    role: "super_admin"
+    goal: "meng-suspend atau mengaktifkan akun tenant"
+    benefit: "saya dapat menegakkan kebijakan penggunaan platform dan melindungi ekosistem"
+
+  # ─── Identity, Access & Security (IAM) ───
+  - id: "US-IAM-1"
+    phase: "phase-1"
+    role: "registered_customer"
+    goal: "mendaftar dan login menggunakan email/password atau Google OAuth"
+    benefit: "saya dapat mengakses akun saya dengan aman menggunakan metode autentikasi pilihan"
+
+  - id: "US-IAM-2"
+    phase: "phase-1"
+    role: "tenant_owner"
+    goal: "mengaktifkan Two-Factor Authentication (TOTP atau WhatsApp OTP) untuk akun saya"
+    benefit: "saya dapat melindungi akun bisnis dari akses tidak sah"
+
+  - id: "US-IAM-3"
+    phase: "phase-1"
+    role: "super_admin"
+    goal: "mengkonfigurasi RBAC granular — permission per menu dan aksi per role"
+    benefit: "saya dapat menerapkan prinsip least privilege untuk keamanan data"
+
+  - id: "US-IAM-4"
+    phase: "phase-1"
+    role: "tenant_owner"
+    goal: "melihat dan mengelola sesi aktif serta melakukan forced logout"
+    benefit: "saya dapat mengontrol keamanan akses ke akun tenant"
+
+  - id: "US-IAM-5"
+    phase: "phase-1"
+    role: "super_admin"
+    goal: "mengakses audit log semua aksi user (who, what, when, from where)"
+    benefit: "saya dapat melakukan investigasi insiden dan memenuhi kepatuhan regulasi"
+
+  # ─── Pricing & Inventory Engine ───
+  - id: "US-PRC-1"
+    phase: "phase-1"
+    role: "operations_manager"
+    goal: "menetapkan harga dasar per rute, produk, dan kendaraan"
+    benefit: "saya dapat mengelola struktur harga fundamental bisnis"
+
+  - id: "US-PRC-2"
+    phase: "phase-1"
+    role: "operations_manager"
+    goal: "mengkonfigurasi seasonal pricing dan holiday surcharge"
+    benefit: "saya dapat memaksimalkan revenue di periode permintaan tinggi"
+
+  - id: "US-PRC-3"
+    phase: "phase-1"
+    role: "registered_customer"
+    goal: "mendapatkan early bird discount saat memesan jauh hari"
+    benefit: "saya dapat menghemat biaya perjalanan dengan perencanaan lebih awal"
+
+  # ─── Promotions & Loyalty Engine ───
+  - id: "US-PROMO-1"
+    phase: "phase-1"
+    role: "marketing_staff"
+    goal: "membuat voucher dan promo code (fixed amount, % discount, free service)"
+    benefit: "saya dapat menjalankan campaign marketing untuk meningkatkan penjualan"
+
+  - id: "US-PROMO-2"
+    phase: "phase-1"
+    role: "registered_customer"
+    goal: "menggunakan kode voucher saat checkout untuk mendapatkan diskon"
+    benefit: "saya dapat menghemat biaya pemesanan dengan promo yang tersedia"
+
+  # ─── Notifications & Communications ───
+  - id: "US-NTF-1"
+    phase: "phase-1"
+    role: "registered_customer"
+    goal: "menerima email konfirmasi booking secara otomatis setelah pemesanan"
+    benefit: "saya memiliki bukti pemesanan yang terdokumentasi"
+
+  - id: "US-NTF-2"
+    phase: "phase-1"
+    role: "registered_customer"
+    goal: "menerima notifikasi WhatsApp (konfirmasi, reminder DP, e-ticket)"
+    benefit: "saya mendapat informasi penting melalui kanal komunikasi yang saya gunakan sehari-hari"
+
+  - id: "US-NTF-3"
+    phase: "phase-1"
+    role: "tenant_owner"
+    goal: "mengkustomisasi template notifikasi sesuai brand tenant"
+    benefit: "saya dapat memberikan white-label experience pada setiap komunikasi ke customer"
+
+  # ─── CRM & Customer Management ───
+  - id: "US-CRM-1"
+    phase: "phase-1"
+    role: "booking_staff_cs"
+    goal: "melihat profil customer terpusat beserta histori booking dan transaksi"
+    benefit: "saya dapat menangani inquiry customer dengan cepat dan akurat"
+
+  - id: "US-CRM-2"
+    phase: "phase-1"
+    role: "registered_customer"
+    goal: "menulis review dan rating setelah perjalanan selesai"
+    benefit: "saya dapat berbagi pengalaman dan membantu customer lain dalam memilih"
+
+  - id: "US-CRM-3"
+    phase: "phase-1"
+    role: "booking_staff_cs"
+    goal: "menangani komplain dan dispute melalui sistem yang terstruktur"
+    benefit: "saya dapat menyelesaikan keluhan customer dengan proses yang jelas dan terlacak"
+
+  # ─── Analytics & Reporting ───
+  - id: "US-ANL-1"
+    phase: "phase-1"
+    role: "tenant_owner"
+    goal: "melihat dashboard operasional real-time (booking, revenue, occupancy)"
+    benefit: "saya dapat memantau kesehatan bisnis setiap hari tanpa membuat laporan manual"
+
+  - id: "US-ANL-2"
+    phase: "phase-1"
+    role: "finance_staff"
+    goal: "mengekspor laporan keuangan ke Excel/CSV/PDF"
+    benefit: "saya dapat membagikan laporan untuk keperluan audit dan akuntansi"
+
+  - id: "US-ANL-3"
+    phase: "phase-1"
+    role: "super_admin"
+    goal: "melihat SaaS-level analytics (tenant growth, GMV, churn rate)"
+    benefit: "saya dapat memonitor kesehatan bisnis platform secara keseluruhan"
+
+  # ─── Vendor & Partner Management ───
+  - id: "US-VND-1"
+    phase: "phase-1"
+    role: "operations_manager"
+    goal: "melakukan onboarding vendor pihak ketiga (profil, kontrak, bank account)"
+    benefit: "saya dapat memasarkan produk vendor tanpa harus memiliki aset sendiri"
+
+  - id: "US-VND-2"
+    phase: "phase-1"
+    role: "operations_manager"
+    goal: "mengatur komisi vendor secara fleksibel per produk"
+    benefit: "saya dapat menetapkan model revenue sharing yang jelas dengan setiap mitra"
+
+acceptance_criteria:
+  # ─── Core Booking Engine ───
+  - story_id: "US-BKG-1"
+    scenarios:
+      - scenario: "Pencarian dan pemesanan tiket one-way berhasil"
+        given: "Customer berada di halaman pencarian tiket"
+        when: "Customer memilih origin, destination, tanggal keberangkatan, dan jumlah penumpang lalu klik Search"
+        then: "Sistem menampilkan daftar trip schedule yang tersedia dengan harga dan sisa kursi"
+      - scenario: "Pemesanan tiket round-trip berhasil"
+        given: "Customer telah memilih trip keberangkatan"
+        when: "Customer memilih trip untuk perjalanan kembali dan menyelesaikan checkout"
+        then: "Sistem membuat satu booking dengan dua booking item (departure & return)"
+
+  - story_id: "US-BKG-2"
+    scenarios:
+      - scenario: "Seat map menampilkan kursi tersedia dan terisi"
+        given: "Customer telah memilih trip schedule"
+        when: "Customer membuka halaman seat selection"
+        then: "Sistem menampilkan layout kursi kendaraan dengan indikator available/booked/selected secara real-time"
+      - scenario: "Customer memilih kursi spesifik"
+        given: "Seat map ditampilkan dengan kursi tersedia"
+        when: "Customer mengklik kursi yang diinginkan dan melanjutkan ke checkout"
+        then: "Kursi tersebut di-lock untuk customer selama masa checkout dan tidak bisa dipilih customer lain"
+
+  - story_id: "US-BKG-3"
+    scenarios:
+      - scenario: "Guest berhasil booking tanpa registrasi"
+        given: "Guest berada di halaman checkout tanpa login"
+        when: "Guest mengisi data penumpang, email, dan menyelesaikan pembayaran"
+        then: "Sistem membuat booking dengan status guest, mengirim email konfirmasi, dan memberikan link untuk registrasi akun"
+
+  - story_id: "US-BKG-4"
+    scenarios:
+      - scenario: "CS Agent membuat booking manual untuk customer"
+        given: "CS Agent login ke dashboard tenant"
+        when: "CS Agent mengisi form booking manual (data customer, trip, penumpang) dan submit"
+        then: "Sistem membuat booking atas nama customer tersebut dengan flag created_by CS Agent"
+
+  - story_id: "US-BKG-5"
+    scenarios:
+      - scenario: "Customer membatalkan booking yang belum dibayar"
+        given: "Customer memiliki booking dengan status Draft"
+        when: "Customer membuka halaman My Bookings dan klik Cancel"
+        then: "Status booking berubah menjadi Cancelled dan kursi yang di-lock dilepaskan kembali ke inventori"
+      - scenario: "Customer memodifikasi tanggal perjalanan"
+        given: "Customer memiliki booking dengan status DP_Paid"
+        when: "Customer mengajukan perubahan tanggal ke jadwal lain yang tersedia"
+        then: "Sistem menghitung selisih harga (jika ada) dan mengupdate booking item dengan jadwal baru"
+
+  - story_id: "US-BKG-6"
+    scenarios:
+      - scenario: "Operations Manager membuat group booking"
+        given: "Operations Manager login ke dashboard tenant"
+        when: "Operations Manager membuat booking dengan 20 penumpang, mengisi manifest nama dan ID masing-masing"
+        then: "Sistem membuat satu booking header dengan 20 passenger records dan mengurangi 20 kursi dari inventori"
+
+  - story_id: "US-BKG-7"
+    scenarios:
+      - scenario: "E-ticket dan QR code digenerate otomatis"
+        given: "Booking telah dikonfirmasi (status Confirmed)"
+        when: "Sistem memproses event booking.confirmed"
+        then: "Setiap passenger menerima e-ticket dengan QR code unik yang dapat di-scan oleh driver/operator saat boarding"
+
+  # ─── Payment & Financial Engine ───
+  - story_id: "US-PAY-1"
+    scenarios:
+      - scenario: "Customer membayar DP 30% untuk booking"
+        given: "Customer telah menyelesaikan pemilihan kursi dan checkout"
+        when: "Customer memilih metode pembayaran DP dan menyelesaikan pembayaran DP sebesar 30%"
+        then: "Status booking berubah menjadi DP_Paid, kursi dikonfirmasi, dan settlement deadline tercatat"
+
+  - story_id: "US-PAY-2"
+    scenarios:
+      - scenario: "Tenant Owner mengatur DP minimum 25% untuk rute Jakarta-Bandung"
+        given: "Tenant Owner login ke dashboard konfigurasi"
+        when: "Tenant Owner mengatur DP minimum 25% untuk rute Jakarta-Bandung dan menyimpan"
+        then: "Setiap booking untuk rute tersebut hanya bisa memilih DP minimal 25% dari total harga"
+
+  - story_id: "US-PAY-3"
+    scenarios:
+      - scenario: "Customer menerima reminder pelunasan H-3"
+        given: "Customer memiliki booking DP_Paid dengan settlement deadline 3 hari lagi"
+        when: "Sistem scheduler berjalan pada H-3"
+        then: "Customer menerima notifikasi WhatsApp dan email yang mengingatkan untuk melunasi sebelum deadline"
+
+  - story_id: "US-PAY-4"
+    scenarios:
+      - scenario: "Customer membayar via Virtual Account BCA"
+        given: "Customer berada di halaman pembayaran"
+        when: "Customer memilih metode VA BCA dan menyelesaikan checkout"
+        then: "Sistem membuat payment intent dengan VA number BCA, customer dapat transfer ke nomor VA tersebut"
+      - scenario: "Customer membayar via QRIS"
+        given: "Customer berada di halaman pembayaran"
+        when: "Customer memilih metode QRIS"
+        then: "Sistem menampilkan QR code QRIS yang dapat di-scan oleh aplikasi e-wallet"
+
+  - story_id: "US-PAY-5"
+    scenarios:
+      - scenario: "Finance Staff memproses refund parsial"
+        given: "Booking Confirmed dengan nilai Rp 500.000, customer mengajukan refund 50%"
+        when: "Finance Staff membuat refund request parsial Rp 250.000 dan mengirim ke approval"
+        then: "Refund request menunggu approval tenant_owner sebelum diproses ke gateway"
+      - scenario: "Refund disetujui dan diproses"
+        given: "Refund request menunggu approval"
+        when: "Tenant Owner menyetujui refund"
+        then: "Sistem memproses refund ke gateway dan mengupdate status refund menjadi Completed"
+
+  - story_id: "US-PAY-6"
+    scenarios:
+      - scenario: "Finance Staff melihat laporan rekonsiliasi harian"
+        given: "Finance Staff login ke dashboard"
+        when: "Finance Staff membuka halaman Rekonsiliasi Harian untuk tanggal tertentu"
+        then: "Sistem menampilkan semua transaksi masuk (payment confirmed) dan keluar (refund) yang direkonsiliasi dengan data gateway"
+
+  - story_id: "US-PAY-7"
+    scenarios:
+      - scenario: "Tenant Owner mengatur markup 5% untuk channel agen eksternal"
+        given: "Tenant Owner login ke dashboard pricing"
+        when: "Tenant Owner menambahkan markup rule 5% untuk sales channel 'Agen Mitra'"
+        then: "Setiap booking yang berasal dari channel 'Agen Mitra' otomatis dikenakan markup 5% dari harga dasar"
+
+  # ─── Fleet & Driver Management ───
+  - story_id: "US-FLT-1"
+    scenarios:
+      - scenario: "Operations Manager mendaftarkan kendaraan baru"
+        given: "Operations Manager login ke dashboard fleet"
+        when: "Operations Manager mengisi form kendaraan (nomor polisi, tipe, kapasitas, fasilitas) dan submit"
+        then: "Kendaraan baru tersimpan dengan status Active dan siap di-assign ke jadwal"
+
+  - story_id: "US-FLT-2"
+    scenarios:
+      - scenario: "Operations Manager meng-assign kendaraan ke trip schedule"
+        given: "Ada trip schedule tanpa kendaraan dan kendaraan tersedia"
+        when: "Operations Manager memilih kendaraan untuk trip schedule tersebut"
+        then: "Sistem memvalidasi tidak ada konflik jadwal dan meng-assign kendaraan"
+      - scenario: "Sistem menolak double-assignment kendaraan"
+        given: "Kendaraan A sudah di-assign ke Trip X pada jam 08:00-12:00"
+        when: "Operations Manager mencoba meng-assign Kendaraan A ke Trip Y pada jam 10:00-14:00"
+        then: "Sistem menolak dengan pesan error 'Kendaraan sudah di-assign pada jadwal yang bentrok'"
+
+  - story_id: "US-FLT-3"
+    scenarios:
+      - scenario: "Operations Manager onboarding pengemudi baru"
+        given: "Operations Manager login ke dashboard driver"
+        when: "Operations Manager mengisi data pengemudi (nama, SIM, KTP, rekam jejak) dan submit"
+        then: "Pengemudi baru tersimpan dengan status Active dan siap dijadwalkan"
+
+  - story_id: "US-FLT-4"
+    scenarios:
+      - scenario: "Fleet Supervisor menjadwalkan maintenance"
+        given: "Fleet Supervisor login ke dashboard maintenance"
+        when: "Fleet Supervisor menambahkan jadwal servis berkala untuk Kendaraan X pada tanggal tertentu"
+        then: "Status kendaraan berubah menjadi Maintenance pada tanggal tersebut"
+      - scenario: "Notifikasi maintenance jatuh tempo terkirim"
+        given: "Kendaraan Y memiliki jadwal servis 3 hari lagi"
+        when: "Sistem scheduler berjalan"
+        then: "Fleet Supervisor menerima notifikasi bahwa servis Kendaraan Y jatuh tempo dalam 3 hari"
+
+  - story_id: "US-FLT-5"
+    scenarios:
+      - scenario: "Driver melihat jadwal perjalanan hari ini"
+        given: "Driver login ke aplikasi mobile/dashboard"
+        when: "Driver membuka halaman My Schedule"
+        then: "Sistem menampilkan daftar trip yang di-assign ke driver tersebut untuk hari ini"
+      - scenario: "Driver update status perjalanan"
+        given: "Driver sedang dalam perjalanan"
+        when: "Driver mengupdate status menjadi 'Berangkat' atau 'Tiba di tujuan'"
+        then: "Status trip schedule terupdate secara real-time dan terlihat oleh operations manager"
+
+  # ─── Tour Package & Itinerary Management ───
+  - story_id: "US-TOUR-1"
+    scenarios:
+      - scenario: "Tenant Owner membuat paket wisata baru"
+        given: "Tenant Owner login ke dashboard tour package"
+        when: "Tenant Owner mengisi nama paket, deskripsi, durasi, inklusi/eksklusi, itinerary harian, dan harga"
+        then: "Paket wisata tersimpan dengan status Draft dan bisa dipublikasikan"
+      - scenario: "Tenant Owner mem-bundle transportasi dan hotel dalam paket"
+        given: "Tenant Owner sedang membuat paket wisata"
+        when: "Tenant Owner menambahkan komponen transportasi (trip schedule) dan hotel (kamar) ke dalam paket"
+        then: "Harga paket otomatis mengkalkulasi total dari komponen yang di-bundle"
+
+  - story_id: "US-TOUR-2"
+    scenarios:
+      - scenario: "Customer memesan paket wisata dengan DP"
+        given: "Customer melihat halaman detail paket wisata"
+        when: "Customer memilih tanggal keberangkatan, jumlah pax, dan memilih opsi DP 30%"
+        then: "Customer diarahkan ke checkout dengan total DP yang harus dibayar dan deadline pelunasan"
+
+  - story_id: "US-TOUR-3"
+    scenarios:
+      - scenario: "Marketing Staff menambahkan foto ke galeri paket"
+        given: "Marketing Staff login dan membuka editor paket wisata"
+        when: "Marketing Staff mengunggah 5 foto ke galeri paket dan menambahkan deskripsi rich text"
+        then: "Halaman publik paket wisata menampilkan galeri foto dan konten yang telah diformat"
+
+  - story_id: "US-TOUR-4"
+    scenarios:
+      - scenario: "Customer melihat kalender ketersediaan paket"
+        given: "Customer berada di halaman detail paket wisata"
+        when: "Customer membuka availability calendar"
+        then: "Sistem menampilkan kalender dengan tanggal yang tersedia (hijau) dan yang sudah penuh (merah)"
+
+  # ─── Vehicle Rental Management ───
+  - story_id: "US-RNT-1"
+    scenarios:
+      - scenario: "Customer memesan rental mobil dengan driver"
+        given: "Customer berada di halaman katalog rental"
+        when: "Customer memilih kendaraan, opsi 'Dengan Driver', tanggal mulai & selesai, lalu checkout dengan DP"
+        then: "Booking rental dibuat dengan status DP_Paid dan kendaraan di-reserve untuk periode tersebut"
+
+  - story_id: "US-RNT-2"
+    scenarios:
+      - scenario: "CS Agent membuat kontrak digital"
+        given: "Booking rental telah dikonfirmasi"
+        when: "CS Agent mengirim kontrak digital ke customer melalui platform e-signature"
+        then: "Customer menerima link untuk menandatangani kontrak secara digital, dan kontrak tersimpan di sistem"
+
+  - story_id: "US-RNT-3"
+    scenarios:
+      - scenario: "Finance Staff menahan deposit rental"
+        given: "Customer akan mengambil kendaraan rental"
+        when: "Finance Staff membuat payment intent deposit_hold sebesar Rp 1.000.000"
+        then: "Deposit di-hold dari customer dan akan di-release saat kendaraan dikembalikan tanpa masalah"
+      - scenario: "Finance Staff memotong deposit untuk denda"
+        given: "Kendaraan rental dikembalikan dengan kerusakan"
+        when: "Finance Staff memotong deposit sebesar biaya perbaikan Rp 300.000"
+        then: "Sisa deposit Rp 700.000 di-release ke customer dan Rp 300.000 dicatat sebagai denda"
+
+  - story_id: "US-RNT-4"
+    scenarios:
+      - scenario: "CS Agent mendokumentasikan kondisi kendaraan"
+        given: "Customer akan mengambil kendaraan rental"
+        when: "CS Agent mengambil foto kondisi kendaraan (eksterior, interior) dan menyimpannya di sistem"
+        then: "Foto kondisi sebelum rental tersimpan sebagai bukti untuk perbandingan saat pengembalian"
+
+  # ─── Airport Transfer & Shuttle Management ───
+  - story_id: "US-XFER-1"
+    scenarios:
+      - scenario: "Customer memesan transfer bandara arrival"
+        given: "Customer berada di halaman transfer bandara"
+        when: "Customer memilih tipe Arrival, mengisi nomor penerbangan, jumlah pax, dan memilih tipe kendaraan MPV"
+        then: "Booking transfer dibuat dengan detail penerbangan dan tipe kendaraan yang dipilih"
+
+  - story_id: "US-XFER-2"
+    scenarios:
+      - scenario: "Operations Manager membuat jadwal shuttle tetap"
+        given: "Operations Manager login ke dashboard shuttle"
+        when: "Operations Manager membuat rute shuttle Jakarta-Bandung dengan jadwal keberangkatan setiap jam 08:00 dan 14:00"
+        then: "Jadwal shuttle tersimpan dan tersedia untuk dipesan customer"
+
+  - story_id: "US-XFER-3"
+    scenarios:
+      - scenario: "Passenger mengakses manifest digital"
+        given: "Passenger telah booking shuttle"
+        when: "Passenger membuka halaman e-ticket/booking detail"
+        then: "Passenger dapat melihat detail perjalanan termasuk titik keberangkatan, estimasi tiba, dan kontak darurat"
+
+  # ─── Hotel & Accommodation Management ───
+  - story_id: "US-HTL-1"
+    scenarios:
+      - scenario: "Tenant Owner mendaftarkan properti hotel"
+        given: "Tenant Owner login ke dashboard hotel"
+        when: "Tenant Owner mengisi data properti (nama, alamat, bintang) dan menambahkan tipe kamar dengan harga"
+        then: "Properti hotel dan tipe kamar tersimpan dan siap dijual"
+
+  - story_id: "US-HTL-2"
+    scenarios:
+      - scenario: "Customer memesan kamar hotel dengan DP"
+        given: "Customer melihat detail hotel"
+        when: "Customer memilih tipe kamar, tanggal check-in/check-out, dan membayar DP 25%"
+        then: "Booking hotel dibuat dengan status DP_Paid, kamar di-reserve, dan deadline pelunasan sebelum check-in"
+
+  - story_id: "US-HTL-3"
+    scenarios:
+      - scenario: "Finance Staff mengkonfigurasi cancellation policy"
+        given: "Finance Staff login ke dashboard hotel"
+        when: "Finance Staff mengatur cancellation policy: 'Free cancellation H-7, 50% refund H-3, no refund < H-3'"
+        then: "Setiap pembatalan booking hotel otomatis mengikuti policy tersebut"
+
+  # ─── Tenant & Multi-Tenancy Management ───
+  - story_id: "US-TNT-1"
+    scenarios:
+      - scenario: "Bisnis baru mendaftar tenant"
+        given: "Calon tenant berada di halaman pendaftaran"
+        when: "Calon tenant mengisi data bisnis (legal name, business type, owner email) dan mengunggah dokumen KYB"
+        then: "Tenant dibuat dengan status KYB Pending dan Super Admin menerima notifikasi untuk review"
+
+  - story_id: "US-TNT-2"
+    scenarios:
+      - scenario: "Tenant Owner mengkonfigurasi white-label"
+        given: "Tenant Owner login ke dashboard pengaturan"
+        when: "Tenant Owner mengunggah logo, memilih warna primer, dan mengatur custom domain"
+        then: "Customer-facing pages menampilkan branding tenant tersebut"
+
+  - story_id: "US-TNT-3"
+    scenarios:
+      - scenario: "Super Admin mengelola tier subscription"
+        given: "Super Admin login ke SaaS dashboard"
+        when: "Super Admin mengubah tier tenant dari Starter ke Growth dan mengaktifkan feature flag tambahan"
+        then: "Tenant langsung mendapatkan akses ke fitur-fitur tier Growth"
+
+  - story_id: "US-TNT-4"
+    scenarios:
+      - scenario: "Super Admin men-suspend tenant"
+        given: "Tenant melanggar kebijakan platform"
+        when: "Super Admin membuka halaman tenant dan klik Suspend"
+        then: "Semua user tenant tidak dapat login, dan customer-facing pages tenant menampilkan pesan maintenance"
+
+  # ─── Identity, Access & Security (IAM) ───
+  - story_id: "US-IAM-1"
+    scenarios:
+      - scenario: "User registrasi dengan email dan password"
+        given: "User berada di halaman registrasi"
+        when: "User mengisi email, password (min 8 karakter, ada huruf besar & angka), dan submit"
+        then: "Akun dibuat, email verifikasi dikirim, dan user bisa login setelah verifikasi"
+      - scenario: "User login dengan Google OAuth"
+        given: "User berada di halaman login"
+        when: "User klik 'Login with Google' dan menyetujui otorisasi"
+        then: "User berhasil login tanpa password, akun otomatis terverifikasi"
+
+  - story_id: "US-IAM-2"
+    scenarios:
+      - scenario: "Tenant Owner mengaktifkan TOTP 2FA"
+        given: "Tenant Owner login ke pengaturan keamanan"
+        when: "Tenant Owner mengaktifkan 2FA metode TOTP dan memindai QR code dengan authenticator app"
+        then: "Setiap login berikutnya akan meminta kode TOTP setelah password berhasil"
+
+  - story_id: "US-IAM-3"
+    scenarios:
+      - scenario: "Super Admin mengkonfigurasi permission role"
+        given: "Super Admin login ke dashboard RBAC"
+        when: "Super Admin menambahkan permission 'booking.approve' ke role operations_manager"
+        then: "Semua user dengan role operations_manager langsung memiliki izin tersebut"
+
+  - story_id: "US-IAM-4"
+    scenarios:
+      - scenario: "Tenant Owner melakukan forced logout"
+        given: "Tenant Owner melihat daftar sesi aktif"
+        when: "Tenant Owner mengklik 'Revoke' pada sesi yang mencurigakan"
+        then: "Sesi tersebut langsung di-revoke dan user terkait harus login ulang"
+
+  - story_id: "US-IAM-5"
+    scenarios:
+      - scenario: "Super Admin mencari audit log"
+        given: "Super Admin login ke dashboard audit"
+        when: "Super Admin memfilter audit log berdasarkan user, rentang tanggal, dan tipe aksi"
+        then: "Sistem menampilkan daftar log dengan detail who, what, when, from where, dan old/new values"
+
+  # ─── Pricing & Inventory Engine ───
+  - story_id: "US-PRC-1"
+    scenarios:
+      - scenario: "Operations Manager menetapkan harga dasar rute"
+        given: "Operations Manager login ke dashboard pricing"
+        when: "Operations Manager menetapkan harga Rp 150.000 untuk rute Jakarta-Bandung"
+        then: "Semua trip schedule di rute tersebut menggunakan harga dasar Rp 150.000"
+
+  - story_id: "US-PRC-2"
+    scenarios:
+      - scenario: "Operations Manager mengatur holiday surcharge"
+        given: "Operations Manager login ke dashboard pricing"
+        when: "Operations Manager menambahkan surcharge 20% untuk periode Lebaran (tanggal tertentu)"
+        then: "Harga tiket di periode tersebut otomatis naik 20% dari harga dasar"
+
+  - story_id: "US-PRC-3"
+    scenarios:
+      - scenario: "Customer mendapat early bird discount"
+        given: "Customer mencari tiket untuk keberangkatan 30 hari lagi"
+        when: "Sistem menghitung harga dengan early bird discount 15%"
+        then: "Customer melihat harga yang lebih murah dibandingkan pemesanan mendekati keberangkatan"
+
+  # ─── Promotions & Loyalty Engine ───
+  - story_id: "US-PROMO-1"
+    scenarios:
+      - scenario: "Marketing Staff membuat voucher diskon"
+        given: "Marketing Staff login ke dashboard promosi"
+        when: "Marketing Staff membuat voucher 'LEBARAN20' dengan diskon 20%, maksimal 500 penggunaan, berlaku sampai akhir bulan"
+        then: "Voucher tersimpan dan siap digunakan customer saat checkout"
+
+  - story_id: "US-PROMO-2"
+    scenarios:
+      - scenario: "Customer menggunakan voucher saat checkout"
+        given: "Customer berada di halaman checkout dengan total Rp 500.000"
+        when: "Customer memasukkan kode voucher 'LEBARAN20' yang memberikan diskon 20%"
+        then: "Total pembayaran berkurang menjadi Rp 400.000 dan penggunaan voucher tercatat"
+
+  # ─── Notifications & Communications ───
+  - story_id: "US-NTF-1"
+    scenarios:
+      - scenario: "Customer menerima email konfirmasi booking"
+        given: "Booking baru saja dibuat dengan status Draft"
+        when: "Sistem memproses event booking.created"
+        then: "Customer menerima email berisi detail booking, jumlah yang harus dibayar, dan instruksi pembayaran"
+
+  - story_id: "US-NTF-2"
+    scenarios:
+      - scenario: "Customer menerima e-ticket via WhatsApp"
+        given: "Booking telah dikonfirmasi (Confirmed)"
+        when: "Sistem mengirim e-ticket melalui WhatsApp Business API"
+        then: "Customer menerima pesan WhatsApp berisi QR code dan detail perjalanan"
+
+  - story_id: "US-NTF-3"
+    scenarios:
+      - scenario: "Tenant Owner mengkustomisasi template notifikasi"
+        given: "Tenant Owner login ke pengaturan notifikasi"
+        when: "Tenant Owner mengedit template email konfirmasi dengan logo dan warna brand"
+        then: "Semua email konfirmasi ke customer tenant tersebut menggunakan template yang sudah dikustomisasi"
+
+  # ─── CRM & Customer Management ───
+  - story_id: "US-CRM-1"
+    scenarios:
+      - scenario: "CS Agent melihat profil customer"
+        given: "Customer menghubungi CS Agent"
+        when: "CS Agent mencari customer berdasarkan email atau nomor telepon"
+        then: "Sistem menampilkan profil lengkap customer beserta histori booking dan status pembayaran"
+
+  - story_id: "US-CRM-2"
+    scenarios:
+      - scenario: "Customer menulis review setelah perjalanan"
+        given: "Perjalanan customer telah selesai (trip status Completed)"
+        when: "Customer membuka halaman booking dan menulis review bintang 4 serta komentar"
+        then: "Review tersimpan dengan status pending moderation dan akan ditampilkan setelah disetujui"
+
+  - story_id: "US-CRM-3"
+    scenarios:
+      - scenario: "CS Agent membuka tiket komplain"
+        given: "Customer melaporkan keluhan melalui form complaint"
+        when: "CS Agent menerima notifikasi komplain baru dan membuka tiket"
+        then: "Sistem membuat tiket komplain dengan status Open, tercatat timestamp, dan CS Agent dapat merespons"
+
+  # ─── Analytics & Reporting ───
+  - story_id: "US-ANL-1"
+    scenarios:
+      - scenario: "Tenant Owner melihat dashboard real-time"
+        given: "Tenant Owner login ke dashboard"
+        when: "Tenant Owner membuka halaman Dashboard"
+        then: "Sistem menampilkan metrik hari ini: total booking, total revenue, occupancy rate, dan outstanding DP"
+
+  - story_id: "US-ANL-2"
+    scenarios:
+      - scenario: "Finance Staff mengekspor laporan keuangan"
+        given: "Finance Staff berada di halaman laporan keuangan"
+        when: "Finance Staff memilih periode bulan ini dan klik Export PDF"
+        then: "Sistem menghasilkan file PDF berisi laporan revenue, refund, dan settlement untuk periode tersebut"
+
+  - story_id: "US-ANL-3"
+    scenarios:
+      - scenario: "Super Admin melihat SaaS analytics"
+        given: "Super Admin login ke SaaS dashboard"
+        when: "Super Admin membuka halaman Platform Analytics"
+        then: "Sistem menampilkan grafik tenant growth, GMV bulanan, dan churn rate"
+
+  # ─── Vendor & Partner Management ───
+  - story_id: "US-VND-1"
+    scenarios:
+      - scenario: "Operations Manager onboarding vendor baru"
+        given: "Operations Manager login ke dashboard vendor"
+        when: "Operations Manager mengisi data vendor (nama, kontak, informasi bank) dan mengunggah kontrak"
+        then: "Vendor tersimpan dengan status Active dan siap dikaitkan dengan produk"
+
+  - story_id: "US-VND-2"
+    scenarios:
+      - scenario: "Operations Manager mengatur komisi vendor"
+        given: "Vendor telah terdaftar"
+        when: "Operations Manager mengatur komisi 10% untuk produk-produk dari vendor tersebut"
+        then: "Setiap penjualan produk vendor otomatis menghitung komisi 10% untuk vendor"

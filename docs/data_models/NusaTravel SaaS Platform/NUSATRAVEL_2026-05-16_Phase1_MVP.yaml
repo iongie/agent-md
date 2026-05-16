@@ -1,0 +1,4237 @@
+report_type: "TypeORM_Entity_and_Seeder_Design"
+generated_for: "NestJS"
+generated_at: "2026-05-16"
+source_prd: "docs/PRD/NusaTravel SaaS Platform/PRD_2026-05-15_Phase1_MVP.yaml"
+phase: "phase-1"
+phase_name: "MVP"
+
+security_notes:
+  - "Setiap entity dengan tenant_id WAJIB menggunakan TypeORM Subscriber atau Global Interceptor untuk inject klausa WHERE tenant_id = X pada setiap query. Ini menjamin data isolation antar tenant."
+  - "Gunakan ULID (varchar(26)) sebagai primary key di semua tabel untuk mencegah enumerasi ID dan memudahkan distributed system di masa depan."
+  - "Password user di-hash dengan bcrypt/argon2. Jangan pernah simpan plaintext."
+  - "AuditLog bersifat append-only & immutable — gunakan trigger/Subscriber untuk mencegah UPDATE/DELETE."
+  - "PaymentTransaction.raw_webhook_payload disimpan sebagai JSONB untuk audit trail lengkap dari gateway."
+  - "Semua kolom bertipe timestamp menggunakan TIMESTAMPTZ (UTC) untuk konsistensi lintas zona waktu."
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ENTITY DEFINITIONS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+entities:
+  # ──────────────────────────────────────────────────────────────────────────
+  # IDENTITY & ACCESS MANAGEMENT (IAM)
+  # ──────────────────────────────────────────────────────────────────────────
+
+  - entity_name: "User"
+    table_name: "users"
+    is_isolated: false  # Global — SaaS-level users have tenant_id=NULL
+    description: "Global identity account untuk semua persona (SaaS staff, tenant user, end customer)."
+    columns:
+      - name: "id"
+        type: "varchar"
+        length: 26
+        is_primary: true
+        comment: "ULID format"
+      - name: "tenant_id"
+        type: "varchar"
+        length: 26
+        is_nullable: true
+        comment: "NULL = SaaS-level user (super_admin, saas_support, dll). Berisi = tenant-scoped user."
+      - name: "email"
+        type: "varchar"
+        length: 320
+        is_unique: true
+        is_nullable: false
+      - name: "phone_e164"
+        type: "varchar"
+        length: 16
+        is_unique: true
+        is_nullable: true
+      - name: "password_hash"
+        type: "varchar"
+        length: 255
+        is_nullable: true
+        comment: "NULL jika user hanya login via OAuth (Google)."
+      - name: "full_name"
+        type: "varchar"
+        length: 200
+        is_nullable: false
+      - name: "avatar_url"
+        type: "varchar"
+        length: 500
+        is_nullable: true
+      - name: "status"
+        type: "varchar"
+        length: 20
+        is_nullable: false
+        default: "active"
+        comment: "active | suspended | locked | deleted"
+      - name: "email_verified_at"
+        type: "timestamptz"
+        is_nullable: true
+      - name: "phone_verified_at"
+        type: "timestamptz"
+        is_nullable: true
+      - name: "failed_login_attempts"
+        type: "int"
+        is_nullable: false
+        default: 0
+      - name: "locked_until"
+        type: "timestamptz"
+        is_nullable: true
+      - name: "last_login_at"
+        type: "timestamptz"
+        is_nullable: true
+      - name: "last_login_ip"
+        type: "varchar"
+        length: 45
+        is_nullable: true
+        comment: "IPv4 atau IPv6"
+      - name: "two_factor_enabled"
+        type: "boolean"
+        is_nullable: false
+        default: false
+      - name: "two_factor_method"
+        type: "varchar"
+        length: 20
+        is_nullable: true
+        comment: "totp | whatsapp_otp"
+      - name: "two_factor_secret"
+        type: "varchar"
+        length: 255
+        is_nullable: true
+        comment: "Encrypted TOTP secret"
+      - name: "oauth_provider"
+        type: "varchar"
+        length: 20
+        is_nullable: true
+        comment: "google (extensible untuk provider lain di masa depan)"
+      - name: "oauth_provider_id"
+        type: "varchar"
+        length: 255
+        is_nullable: true
+      - name: "created_at"
+        type: "timestamptz"
+        is_nullable: false
+        default: "NOW()"
+      - name: "updated_at"
+        type: "timestamptz"
+        is_nullable: false
+        default: "NOW()"
+    relations:
+      - type: "ManyToOne"
+        target_entity: "Tenant"
+        join_column: "tenant_id"
+        inverse_side: "users"
+        on_delete: "SET NULL"
+      - type: "OneToMany"
+        target_entity: "UserRole"
+        inverse_side: "user"
+        on_delete: "CASCADE"
+      - type: "OneToMany"
+        target_entity: "UserSession"
+        inverse_side: "user"
+        on_delete: "CASCADE"
+      - type: "OneToMany"
+        target_entity: "AuditLog"
+        inverse_side: "user"
+        on_delete: "RESTRICT"
+
+  - entity_name: "UserSession"
+    table_name: "user_sessions"
+    is_isolated: false
+    description: "Session management untuk tracking sesi aktif & forced logout."
+    columns:
+      - name: "id"
+        type: "varchar"
+        length: 26
+        is_primary: true
+        comment: "ULID format"
+      - name: "user_id"
+        type: "varchar"
+        length: 26
+        is_nullable: false
+      - name: "refresh_token_hash"
+        type: "varchar"
+        length: 255
+        is_nullable: false
+      - name: "ip_address"
+        type: "varchar"
+        length: 45
+        is_nullable: true
+      - name: "user_agent"
+        type: "varchar"
+        length: 500
+        is_nullable: true
+      - name: "device_info"
+        type: "varchar"
+        length: 300
+        is_nullable: true
+      - name: "expires_at"
+        type: "timestamptz"
+        is_nullable: false
+      - name: "revoked_at"
+        type: "timestamptz"
+        is_nullable: true
+        comment: "NULL = masih aktif. Berisi timestamp = telah di-revoke."
+      - name: "created_at"
+        type: "timestamptz"
+        is_nullable: false
+        default: "NOW()"
+    relations:
+      - type: "ManyToOne"
+        target_entity: "User"
+        join_column: "user_id"
+        inverse_side: "sessions"
+        on_delete: "CASCADE"
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # MULTI-TENANCY
+  # ──────────────────────────────────────────────────────────────────────────
+
+  - entity_name: "Tenant"
+    table_name: "tenants"
+    is_isolated: false  # Global — dikelola oleh Super Admin
+    description: "Entitas bisnis yang menggunakan platform (agen perjalanan, operator bus, dll)."
+    columns:
+      - name: "id"
+        type: "varchar"
+        length: 26
+        is_primary: true
+        comment: "ULID format"
+      - name: "tenant_code"
+        type: "varchar"
+        length: 50
+        is_unique: true
+        is_nullable: false
+        comment: "Unique slug, e.g., 'agensi-maju-jaya'"
+      - name: "legal_name"
+        type: "varchar"
+        length: 200
+        is_nullable: false
+      - name: "business_type"
+        type: "varchar"
+        length: 50
+        is_nullable: false
+        comment: "travel_agency | bus_operator | shuttle_operator | car_rental | hotel_aggregator | mixed"
+      - name: "tax_id"
+        type: "varchar"
+        length: 50
+        is_nullable: true
+        comment: "NPWP perusahaan"
+      - name: "kyb_status"
+        type: "varchar"
+        length: 20
+        is_nullable: false
+        default: "pending"
+        comment: "pending | approved | rejected"
+      - name: "kyb_rejection_reason"
+        type: "text"
+        is_nullable: true
+      - name: "subscription_tier"
+        type: "varchar"
+        length: 20
+        is_nullable: false
+        default: "starter"
+        comment: "starter | growth | enterprise"
+      - name: "subscription_status"
+        type: "varchar"
+        length: 20
+        is_nullable: false
+        default: "trial"
+        comment: "trial | active | grace | suspended | cancelled"
+      - name: "trial_ends_at"
+        type: "timestamptz"
+        is_nullable: true
+      - name: "grace_ends_at"
+        type: "timestamptz"
+        is_nullable: true
+      - name: "white_label_logo_url"
+        type: "varchar"
+        length: 500
+        is_nullable: true
+      - name: "white_label_primary_color"
+        type: "varchar"
+        length: 7
+        is_nullable: true
+        comment: "Hex color, e.g., #FF5733"
+      - name: "white_label_custom_domain"
+        type: "varchar"
+        length: 253
+        is_nullable: true
+      - name: "contact_email"
+        type: "varchar"
+        length: 320
+        is_nullable: false
+      - name: "contact_phone"
+        type: "varchar"
+        length: 16
+        is_nullable: true
+      - name: "address_line"
+        type: "text"
+        is_nullable: true
+      - name: "city"
+        type: "varchar"
+        length: 100
+        is_nullable: true
+      - name: "province"
+        type: "varchar"
+        length: 100
+        is_nullable: true
+      - name: "country"
+        type: "varchar"
+        length: 2
+        is_nullable: false
+        default: "ID"
+        comment: "ISO 3166-1 alpha-2"
+      - name: "created_at"
+        type: "timestamptz"
+        is_nullable: false
+        default: "NOW()"
+      - name: "updated_at"
+        type: "timestamptz"
+        is_nullable: false
+        default: "NOW()"
+    relations:
+      - type: "OneToMany"
+        target_entity: "User"
+        inverse_side: "tenant"
+        on_delete: "RESTRICT"
+      - type: "OneToMany"
+        target_entity: "TenantKYBDocument"
+        inverse_side: "tenant"
+        on_delete: "CASCADE"
+      - type: "OneToMany"
+        target_entity: "SubscriptionInvoice"
+        inverse_side: "tenant"
+        on_delete: "RESTRICT"
+      - type: "OneToMany"
+        target_entity: "Role"
+        inverse_side: "tenant"
+        on_delete: "CASCADE"
+
+  - entity_name: "TenantKYBDocument"
+    table_name: "tenant_kyb_documents"
+    is_isolated: false
+    description: "Dokumen Know Your Business (KYB) yang diunggah tenant saat onboarding."
+    columns:
+      - name: "id"
+        type: "varchar"
+        length: 26
+        is_primary: true
+        comment: "ULID format"
+      - name: "tenant_id"
+        type: "varchar"
+        length: 26
+        is_nullable: false
+      - name: "document_type"
+        type: "varchar"
+        length: 50
+        is_nullable: false
+        comment: "nib | siup | akta_pendirian | ktp_direktur | npwp_perusahaan | lainnya"
+      - name: "file_url"
+        type: "varchar"
+        length: 500
+        is_nullable: false
+      - name: "file_name"
+        type: "varchar"
+        length: 255
+        is_nullable: false
+      - name: "verified_by"
+        type: "varchar"
+        length: 26
+        is_nullable: true
+        comment: "FK ke User (Super Admin yang verifikasi)"
+      - name: "verified_at"
+        type: "timestamptz"
+        is_nullable: true
+      - name: "created_at"
+        type: "timestamptz"
+        is_nullable: false
+        default: "NOW()"
+    relations:
+      - type: "ManyToOne"
+        target_entity: "Tenant"
+        join_column: "tenant_id"
+        inverse_side: "kyb_documents"
+        on_delete: "CASCADE"
+      - type: "ManyToOne"
+        target_entity: "User"
+        join_column: "verified_by"
+        inverse_side: "verified_kyb_documents"
+        on_delete: "SET NULL"
+
+  - entity_name: "SubscriptionInvoice"
+    table_name: "subscription_invoices"
+    is_isolated: false
+    description: "Invoice subscription tenant (bulanan/tahunan)."
+    columns:
+      - name: "id"
+        type: "varchar"
+        length: 26
+        is_primary: true
+        comment: "ULID format"
+      - name: "tenant_id"
+        type: "varchar"
+        length: 26
+        is_nullable: false
+      - name: "invoice_number"
+        type: "varchar"
+        length: 50
+        is_unique: true
+        is_nullable: false
+      - name: "tier"
+        type: "varchar"
+        length: 20
+        is_nullable: false
+      - name: "amount"
+        type: "decimal"
+        precision: 15
+        scale: 2
+        is_nullable: false
+      - name: "period_start"
+        type: "date"
+        is_nullable: false
+      - name: "period_end"
+        type: "date"
+        is_nullable: false
+      - name: "status"
+        type: "varchar"
+        length: 20
+        is_nullable: false
+        default: "pending"
+        comment: "pending | paid | overdue | cancelled"
+      - name: "paid_at"
+        type: "timestamptz"
+        is_nullable: true
+      - name: "created_at"
+        type: "timestamptz"
+        is_nullable: false
+        default: "NOW()"
+    relations:
+      - type: "ManyToOne"
+        target_entity: "Tenant"
+        join_column: "tenant_id"
+        inverse_side: "subscription_invoices"
+        on_delete: "RESTRICT"
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # RBAC (ROLE-BASED ACCESS CONTROL)
+  # ──────────────────────────────────────────────────────────────────────────
+
+  - entity_name: "Role"
+    table_name: "roles"
+    is_isolated: true  # Tenant-scoped jika tenant_id tidak NULL
+    description: "Peran dalam sistem, bisa global (SaaS) atau tenant-scoped."
+    columns:
+      - name: "id"
+        type: "varchar"
+        length: 26
+        is_primary: true
+        comment: "ULID format"
+      - name: "tenant_id"
+        type: "varchar"
+        length: 26
+        is_nullable: true
+        comment: "NULL = global SaaS role (super_admin, saas_support, dll)"
+      - name: "role_code"
+        type: "varchar"
+        length: 50
+        is_nullable: false
+        comment: "Unique dalam scope tenant. e.g., 'operations_manager'"
+      - name: "role_name"
+        type: "varchar"
+        length: 100
+        is_nullable: false
+      - name: "description"
+        type: "text"
+        is_nullable: true
+      - name: "is_system_role"
+        type: "boolean"
+        is_nullable: false
+        default: false
+        comment: "true = tidak bisa dihapus/dimodifikasi oleh tenant"
+      - name: "created_at"
+        type: "timestamptz"
+        is_nullable: false
+        default: "NOW()"
+      - name: "updated_at"
+        type: "timestamptz"
+        is_nullable: false
+        default: "NOW()"
+    relations:
+      - type: "ManyToOne"
+        target_entity: "Tenant"
+        join_column: "tenant_id"
+        inverse_side: "roles"
+        on_delete: "CASCADE"
+      - type: "OneToMany"
+        target_entity: "RolePermission"
+        inverse_side: "role"
+        on_delete: "CASCADE"
+      - type: "OneToMany"
+        target_entity: "UserRole"
+        inverse_side: "role"
+        on_delete: "CASCADE"
+
+  - entity_name: "Permission"
+    table_name: "permissions"
+    is_isolated: false  # Global — permission definitions berlaku untuk semua tenant
+    description: "Izin atomik untuk resource dan aksi tertentu."
+    columns:
+      - name: "id"
+        type: "varchar"
+        length: 26
+        is_primary: true
+        comment: "ULID format"
+      - name: "permission_code"
+        type: "varchar"
+        length: 100
+        is_unique: true
+        is_nullable: false
+        comment: "e.g., 'booking.read', 'fleet.update', 'payment.approve'"
+      - name: "resource"
+        type: "varchar"
+        length: 50
+        is_nullable: false
+        comment: "booking | fleet | payment | tour | rental | hotel | tenant | user | report"
+      - name: "action"
+        type: "varchar"
+        length: 20
+        is_nullable: false
+        comment: "create | read | update | delete | approve | export | manage"
+      - name: "description"
+        type: "varchar"
+        length: 255
+        is_nullable: true
+      - name: "created_at"
+        type: "timestamptz"
+        is_nullable: false
+        default: "NOW()"
+    relations:
+      - type: "OneToMany"
+        target_entity: "RolePermission"
+        inverse_side: "permission"
+        on_delete: "CASCADE"
+
+  - entity_name: "RolePermission"
+    table_name: "role_permissions"
+    is_isolated: false
+    description: "Many-to-many join antara Role dan Permission."
+    columns:
+      - name: "id"
+        type: "varchar"
+        length: 26
+        is_primary: true
+        comment: "ULID format"
+      - name: "role_id"
+        type: "varchar"
+        length: 26
+        is_nullable: false
+      - name: "permission_id"
+        type: "varchar"
+        length: 26
+        is_nullable: false
+      - name: "created_at"
+        type: "timestamptz"
+        is_nullable: false
+        default: "NOW()"
+    relations:
+      - type: "ManyToOne"
+        target_entity: "Role"
+        join_column: "role_id"
+        inverse_side: "role_permissions"
+        on_delete: "CASCADE"
+      - type: "ManyToOne"
+        target_entity: "Permission"
+        join_column: "permission_id"
+        inverse_side: "role_permissions"
+        on_delete: "CASCADE"
+
+  - entity_name: "UserRole"
+    table_name: "user_roles"
+    is_isolated: false
+    description: "Many-to-many join antara User dan Role."
+    columns:
+      - name: "id"
+        type: "varchar"
+        length: 26
+        is_primary: true
+        comment: "ULID format"
+      - name: "user_id"
+        type: "varchar"
+        length: 26
+        is_nullable: false
+      - name: "role_id"
+        type: "varchar"
+        length: 26
+        is_nullable: false
+      - name: "assigned_by"
+        type: "varchar"
+        length: 26
+        is_nullable: true
+        comment: "FK ke User yang memberikan role ini"
+      - name: "created_at"
+        type: "timestamptz"
+        is_nullable: false
+        default: "NOW()"
+    relations:
+      - type: "ManyToOne"
+        target_entity: "User"
+        join_column: "user_id"
+        inverse_side: "user_roles"
+        on_delete: "CASCADE"
+      - type: "ManyToOne"
+        target_entity: "Role"
+        join_column: "role_id"
+        inverse_side: "user_roles"
+        on_delete: "CASCADE"
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # FEATURE FLAG & TIER MANAGEMENT
+  # ──────────────────────────────────────────────────────────────────────────
+
+  - entity_name: "FeatureFlag"
+    table_name: "feature_flags"
+    is_isolated: false  # Global
+    description: "Fitur yang bisa diaktifkan/nonaktifkan per subscription tier."
+    columns:
+      - name: "id"
+        type: "varchar"
+        length: 26
+        is_primary: true
+        comment: "ULID format"
+      - name: "flag_code"
+        type: "varchar"
+        length: 100
+        is_unique: true
+        is_nullable: false
+        comment: "e.g., 'white_label', 'custom_domain', 'api_access', 'multi_branch'"
+      - name: "flag_name"
+        type: "varchar"
+        length: 200
+        is_nullable: false
+      - name: "description"
+        type: "text"
+        is_nullable: true
+      - name: "created_at"
+        type: "timestamptz"
+        is_nullable: false
+        default: "NOW()"
+    relations:
+      - type: "OneToMany"
+        target_entity: "TierFeatureFlag"
+        inverse_side: "feature_flag"
+        on_delete: "CASCADE"
+
+  - entity_name: "TierFeatureFlag"
+    table_name: "tier_feature_flags"
+    is_isolated: false
+    description: "Many-to-many join antara tier subscription dan feature flag."
+    columns:
+      - name: "id"
+        type: "varchar"
+        length: 26
+        is_primary: true
+        comment: "ULID format"
+      - name: "tier"
+        type: "varchar"
+        length: 20
+        is_nullable: false
+        comment: "starter | growth | enterprise"
+      - name: "feature_flag_id"
+        type: "varchar"
+        length: 26
+        is_nullable: false
+      - name: "created_at"
+        type: "timestamptz"
+        is_nullable: false
+        default: "NOW()"
+    relations:
+      - type: "ManyToOne"
+        target_entity: "FeatureFlag"
+        join_column: "feature_flag_id"
+        inverse_side: "tier_feature_flags"
+        on_delete: "CASCADE"
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # LOCATION & ROUTE
+  # ──────────────────────────────────────────────────────────────────────────
+
+  - entity_name: "Location"
+    table_name: "locations"
+    is_isolated: true
+    description: "Kota, terminal, pool, atau titik penjemputan yang digunakan dalam rute perjalanan."
+    columns:
+      - name: "id"
+        type: "varchar"
+        length: 26
+        is_primary: true
+        comment: "ULID format"
+      - name: "tenant_id"
+        type: "varchar"
+        length: 26
+        is_nullable: false
+      - name: "location_code"
+        type: "varchar"
+        length: 20
+        is_nullable: false
+        comment: "e.g., 'JKT', 'BDG', 'SBY'"
+      - name: "location_name"
+        type: "varchar"
+        length: 200
+        is_nullable: false
+      - name: "location_type"
+        type: "varchar"
+        length: 30
+        is_nullable: false
+        comment: "city | terminal | pool | airport | hotel | pickup_point"
+      - name: "address"
+        type: "text"
+        is_nullable: true
+      - name: "latitude"
+        type: "decimal"
+        precision: 10
+        scale: 7
+        is_nullable: true
+      - name: "longitude"
+        type: "decimal"
+        precision: 10
+        scale: 7
+        is_nullable: true
+      - name: "is_active"
+        type: "boolean"
+        is_nullable: false
+        default: true
+      - name: "created_at"
+        type: "timestamptz"
+        is_nullable: false
+        default: "NOW()"
+      - name: "updated_at"
+        type: "timestamptz"
+        is_nullable: false
+        default: "NOW()"
+    relations:
+      - type: "ManyToOne"
+        target_entity: "Tenant"
+        join_column: "tenant_id"
+        inverse_side: "locations"
+        on_delete: "CASCADE"
+
+  - entity_name: "Route"
+    table_name: "routes"
+    is_isolated: true
+    description: "Rute perjalanan yang menghubungkan origin dan destination."
+    columns:
+      - name: "id"
+        type: "varchar"
+        length: 26
+        is_primary: true
+        comment: "ULID format"
+      - name: "tenant_id"
+        type: "varchar"
+        length: 26
+        is_nullable: false
+      - name: "origin_location_id"
+        type: "varchar"
+        length: 26
+        is_nullable: false
+      - name: "destination_location_id"
+        type: "varchar"
+        length: 26
+        is_nullable: false
+      - name: "route_code"
+        type: "varchar"
+        length: 20
+        is_nullable: false
+        comment: "e.g., 'JKT-BDG'"
+      - name: "distance_km"
+        type: "decimal"
+        precision: 8
+        scale: 2
+        is_nullable: true
+      - name: "estimated_duration_minutes"
+        type: "int"
+        is_nullable: true
+      - name: "base_price"
+        type: "decimal"
+        precision: 12
+        scale: 2
+        is_nullable: false
+        comment: "Harga dasar tiket untuk rute ini"
+      - name: "dp_minimum_percentage"
+        type: "decimal"
+        precision: 5
+        scale: 2
+        is_nullable: false
+        default: 30.00
+        comment: "Minimum DP dalam persen, e.g., 30.00 = 30%"
+      - name: "is_active"
+        type: "boolean"
+        is_nullable: false
+        default: true
+      - name: "created_at"
+        type: "timestamptz"
+        is_nullable: false
+        default: "NOW()"
+      - name: "updated_at"
+        type: "timestamptz"
+        is_nullable: false
+        default: "NOW()"
+    relations:
+      - type: "ManyToOne"
+        target_entity: "Tenant"
+        join_column: "tenant_id"
+        inverse_side: "routes"
+        on_delete: "CASCADE"
+      - type: "ManyToOne"
+        target_entity: "Location"
+        join_column: "origin_location_id"
+        inverse_side: "routes_as_origin"
+        on_delete: "RESTRICT"
+      - type: "ManyToOne"
+        target_entity: "Location"
+        join_column: "destination_location_id"
+        inverse_side: "routes_as_destination"
+        on_delete: "RESTRICT"
+      - type: "OneToMany"
+        target_entity: "TripSchedule"
+        inverse_side: "route"
+        on_delete: "RESTRICT"
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # FLEET & DRIVER MANAGEMENT
+  # ──────────────────────────────────────────────────────────────────────────
+
+  - entity_name: "Vehicle"
+    table_name: "vehicles"
+    is_isolated: true
+    description: "Kendaraan dalam armada tenant."
+    columns:
+      - name: "id"
+        type: "varchar"
+        length: 26
+        is_primary: true
+        comment: "ULID format"
+      - name: "tenant_id"
+        type: "varchar"
+        length: 26
+        is_nullable: false
+      - name: "plate_number"
+        type: "varchar"
+        length: 20
+        is_nullable: false
+        comment: "Unique per tenant"
+      - name: "vehicle_type"
+        type: "varchar"
+        length: 30
+        is_nullable: false
+        comment: "bus | minibus | mpv | sedan | suv | van"
+      - name: "brand"
+        type: "varchar"
+        length: 50
+        is_nullable: true
+        comment: "e.g., 'Mercedes-Benz', 'Toyota', 'Hino'"
+      - name: "model"
+        type: "varchar"
+        length: 100
+        is_nullable: true
+      - name: "year"
+        type: "int"
+        is_nullable: true
+      - name: "capacity"
+        type: "int"
+        is_nullable: false
+        comment: "Jumlah kursi penumpang"
+      - name: "seat_layout_rows"
+        type: "int"
+        is_nullable: true
+        comment: "Jumlah baris kursi (untuk render seat map)"
+      - name: "seat_layout_columns"
+        type: "int"
+        is_nullable: true
+        comment: "Jumlah kolom per baris (2-2, 2-3, dll)"
+      - name: "seat_layout_config"
+        type: "jsonb"
+        is_nullable: true
+        comment: "JSON konfigurasi seat map: posisi aisle, kursi non-aktif, dll"
+      - name: "facilities"
+        type: "jsonb"
+        is_nullable: true
+        comment: '["ac", "toilet", "entertainment", "wifi", "usb_charger", "reclining_seat"]'
+      - name: "status"
+        type: "varchar"
+        length: 20
+        is_nullable: false
+        default: "active"
+        comment: "active | maintenance | inactive"
+      - name: "stnk_number"
+        type: "varchar"
+        length: 50
+        is_nullable: true
+      - name: "stnk_expiry"
+        type: "date"
+        is_nullable: true
+      - name: "kir_number"
+        type: "varchar"
+        length: 50
+        is_nullable: true
+      - name: "kir_expiry"
+        type: "date"
+        is_nullable: true
+      - name: "image_url"
+        type: "varchar"
+        length: 500
+        is_nullable: true
+      - name: "created_at"
+        type: "timestamptz"
+        is_nullable: false
+        default: "NOW()"
+      - name: "updated_at"
+        type: "timestamptz"
+        is_nullable: false
+        default: "NOW()"
+    relations:
+      - type: "ManyToOne"
+        target_entity: "Tenant"
+        join_column: "tenant_id"
+        inverse_side: "vehicles"
+        on_delete: "CASCADE"
+      - type: "OneToMany"
+        target_entity: "TripSchedule"
+        inverse_side: "vehicle"
+        on_delete: "RESTRICT"
+      - type: "OneToMany"
+        target_entity: "MaintenanceSchedule"
+        inverse_side: "vehicle"
+        on_delete: "CASCADE"
+
+  - entity_name: "Driver"
+    table_name: "drivers"
+    is_isolated: true
+    description: "Pengemudi yang terdaftar di tenant."
+    columns:
+      - name: "id"
+        type: "varchar"
+        length: 26
+        is_primary: true
+        comment: "ULID format"
+      - name: "tenant_id"
+        type: "varchar"
+        length: 26
+        is_nullable: false
+      - name: "user_id"
+        type: "varchar"
+        length: 26
+        is_nullable: true
+        comment: "Link ke akun login (jika driver punya akses aplikasi)"
+      - name: "full_name"
+        type: "varchar"
+        length: 200
+        is_nullable: false
+      - name: "phone"
+        type: "varchar"
+        length: 16
+        is_nullable: false
+      - name: "sim_type"
+        type: "varchar"
+        length: 10
+        is_nullable: false
+        comment: "A | B1 | B2 | C"
+      - name: "sim_number"
+        type: "varchar"
+        length: 50
+        is_nullable: false
+      - name: "sim_expiry"
+        type: "date"
+        is_nullable: false
+      - name: "ktp_number"
+        type: "varchar"
+        length: 20
+        is_nullable: false
+      - name: "address"
+        type: "text"
+        is_nullable: true
+      - name: "emergency_contact_name"
+        type: "varchar"
+        length: 200
+        is_nullable: true
+      - name: "emergency_contact_phone"
+        type: "varchar"
+        length: 16
+        is_nullable: true
+      - name: "status"
+        type: "varchar"
+        length: 20
+        is_nullable: false
+        default: "active"
+        comment: "active | inactive | suspended"
+      - name: "track_record_notes"
+        type: "text"
+        is_nullable: true
+      - name: "photo_url"
+        type: "varchar"
+        length: 500
+        is_nullable: true
+      - name: "created_at"
+        type: "timestamptz"
+        is_nullable: false
+        default: "NOW()"
+      - name: "updated_at"
+        type: "timestamptz"
+        is_nullable: false
+        default: "NOW()"
+    relations:
+      - type: "ManyToOne"
+        target_entity: "Tenant"
+        join_column: "tenant_id"
+        inverse_side: "drivers"
+        on_delete: "CASCADE"
+      - type: "ManyToOne"
+        target_entity: "User"
+        join_column: "user_id"
+        inverse_side: "driver_profile"
+        on_delete: "SET NULL"
+      - type: "OneToMany"
+        target_entity: "TripSchedule"
+        inverse_side: "driver"
+        on_delete: "RESTRICT"
+      - type: "OneToMany"
+        target_entity: "DriverShift"
+        inverse_side: "driver"
+        on_delete: "CASCADE"
+
+  - entity_name: "MaintenanceSchedule"
+    table_name: "maintenance_schedules"
+    is_isolated: true
+    description: "Jadwal maintenance kendaraan (servis berkala, STNK, KIR)."
+    columns:
+      - name: "id"
+        type: "varchar"
+        length: 26
+        is_primary: true
+        comment: "ULID format"
+      - name: "vehicle_id"
+        type: "varchar"
+        length: 26
+        is_nullable: false
+      - name: "maintenance_type"
+        type: "varchar"
+        length: 30
+        is_nullable: false
+        comment: "regular_service | stnk_renewal | kir_renewal | repair | inspection"
+      - name: "scheduled_date"
+        type: "date"
+        is_nullable: false
+      - name: "completed_date"
+        type: "date"
+        is_nullable: true
+      - name: "description"
+        type: "text"
+        is_nullable: true
+      - name: "cost"
+        type: "decimal"
+        precision: 12
+        scale: 2
+        is_nullable: true
+      - name: "status"
+        type: "varchar"
+        length: 20
+        is_nullable: false
+        default: "scheduled"
+        comment: "scheduled | in_progress | completed | cancelled"
+      - name: "reminder_sent_at"
+        type: "timestamptz"
+        is_nullable: true
+      - name: "created_by"
+        type: "varchar"
+        length: 26
+        is_nullable: false
+        comment: "FK ke User (fleet_supervisor yang membuat)"
+      - name: "created_at"
+        type: "timestamptz"
+        is_nullable: false
+        default: "NOW()"
+      - name: "updated_at"
+        type: "timestamptz"
+        is_nullable: false
+        default: "NOW()"
+    relations:
+      - type: "ManyToOne"
+        target_entity: "Vehicle"
+        join_column: "vehicle_id"
+        inverse_side: "maintenance_schedules"
+        on_delete: "CASCADE"
+
+  - entity_name: "DriverShift"
+    table_name: "driver_shifts"
+    is_isolated: true
+    description: "Jadwal kerja/shift pengemudi."
+    columns:
+      - name: "id"
+        type: "varchar"
+        length: 26
+        is_primary: true
+        comment: "ULID format"
+      - name: "driver_id"
+        type: "varchar"
+        length: 26
+        is_nullable: false
+      - name: "trip_schedule_id"
+        type: "varchar"
+        length: 26
+        is_nullable: false
+      - name: "shift_date"
+        type: "date"
+        is_nullable: false
+      - name: "start_time"
+        type: "timestamptz"
+        is_nullable: false
+      - name: "end_time"
+        type: "timestamptz"
+        is_nullable: false
+      - name: "status"
+        type: "varchar"
+        length: 20
+        is_nullable: false
+        default: "assigned"
+        comment: "assigned | checked_in | on_duty | completed | absent"
+      - name: "notes"
+        type: "text"
+        is_nullable: true
+      - name: "created_at"
+        type: "timestamptz"
+        is_nullable: false
+        default: "NOW()"
+    relations:
+      - type: "ManyToOne"
+        target_entity: "Driver"
+        join_column: "driver_id"
+        inverse_side: "shifts"
+        on_delete: "CASCADE"
+      - type: "ManyToOne"
+        target_entity: "TripSchedule"
+        join_column: "trip_schedule_id"
+        inverse_side: "driver_shifts"
+        on_delete: "CASCADE"
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # CORE BOOKING ENGINE
+  # ──────────────────────────────────────────────────────────────────────────
+
+  - entity_name: "TripSchedule"
+    table_name: "trip_schedules"
+    is_isolated: true
+    description: "Jadwal perjalanan transportasi darat (bus, shuttle, travel)."
+    columns:
+      - name: "id"
+        type: "varchar"
+        length: 26
+        is_primary: true
+        comment: "ULID format"
+      - name: "tenant_id"
+        type: "varchar"
+        length: 26
+        is_nullable: false
+      - name: "route_id"
+        type: "varchar"
+        length: 26
+        is_nullable: false
+      - name: "vehicle_id"
+        type: "varchar"
+        length: 26
+        is_nullable: true
+        comment: "NULL jika kendaraan belum di-assign"
+      - name: "driver_id"
+        type: "varchar"
+        length: 26
+        is_nullable: true
+        comment: "NULL jika driver belum di-assign"
+      - name: "trip_type"
+        type: "varchar"
+        length: 20
+        is_nullable: false
+        comment: "one_way | round_trip | multi_stop | shuttle | transfer"
+      - name: "departure_at"
+        type: "timestamptz"
+        is_nullable: false
+      - name: "arrival_at"
+        type: "timestamptz"
+        is_nullable: false
+      - name: "total_seats"
+        type: "int"
+        is_nullable: false
+        comment: "Total kursi tersedia (sinkron dari vehicle.capacity)"
+      - name: "available_seats"
+        type: "int"
+        is_nullable: false
+        comment: "Kursi yang belum dibooking"
+      - name: "base_price"
+        type: "decimal"
+        precision: 12
+        scale: 2
+        is_nullable: false
+        comment: "Harga dasar per kursi untuk jadwal ini"
+      - name: "status"
+        type: "varchar"
+        length: 20
+        is_nullable: false
+        default: "scheduled"
+        comment: "scheduled | boarding | in_progress | completed | cancelled"
+      - name: "cancellation_reason"
+        type: "text"
+        is_nullable: true
+      - name: "created_at"
+        type: "timestamptz"
+        is_nullable: false
+        default: "NOW()"
+      - name: "updated_at"
+        type: "timestamptz"
+        is_nullable: false
+        default: "NOW()"
+    relations:
+      - type: "ManyToOne"
+        target_entity: "Tenant"
+        join_column: "tenant_id"
+        inverse_side: "trip_schedules"
+        on_delete: "CASCADE"
+      - type: "ManyToOne"
+        target_entity: "Route"
+        join_column: "route_id"
+        inverse_side: "trip_schedules"
+        on_delete: "RESTRICT"
+      - type: "ManyToOne"
+        target_entity: "Vehicle"
+        join_column: "vehicle_id"
+        inverse_side: "trip_schedules"
+        on_delete: "SET NULL"
+      - type: "ManyToOne"
+        target_entity: "Driver"
+        join_column: "driver_id"
+        inverse_side: "trip_schedules"
+        on_delete: "SET NULL"
+      - type: "OneToMany"
+        target_entity: "DriverShift"
+        inverse_side: "trip_schedule"
+        on_delete: "CASCADE"
+      - type: "OneToMany"
+        target_entity: "SeatLock"
+        inverse_side: "trip_schedule"
+        on_delete: "CASCADE"
+
+  - entity_name: "SeatLock"
+    table_name: "seat_locks"
+    is_isolated: true
+    description: "Lock kursi sementara selama proses checkout untuk mencegah double-booking."
+    columns:
+      - name: "id"
+        type: "varchar"
+        length: 26
+        is_primary: true
+        comment: "ULID format"
+      - name: "trip_schedule_id"
+        type: "varchar"
+        length: 26
+        is_nullable: false
+      - name: "seat_code"
+        type: "varchar"
+        length: 10
+        is_nullable: false
+        comment: "e.g., 'A1', 'B3'"
+      - name: "session_token"
+        type: "varchar"
+        length: 255
+        is_nullable: false
+        comment: "Token unik untuk sesi checkout (guest atau user)"
+      - name: "expires_at"
+        type: "timestamptz"
+        is_nullable: false
+        comment: "Lock otomatis expired setelah N menit (misal 15 menit)"
+      - name: "created_at"
+        type: "timestamptz"
+        is_nullable: false
+        default: "NOW()"
+    relations:
+      - type: "ManyToOne"
+        target_entity: "TripSchedule"
+        join_column: "trip_schedule_id"
+        inverse_side: "seat_locks"
+        on_delete: "CASCADE"
+
+  - entity_name: "Booking"
+    table_name: "bookings"
+    is_isolated: true
+    description: "Header pemesanan yang menyatukan satu atau lebih item perjalanan."
+    columns:
+      - name: "id"
+        type: "varchar"
+        length: 26
+        is_primary: true
+        comment: "ULID format"
+      - name: "tenant_id"
+        type: "varchar"
+        length: 26
+        is_nullable: false
+      - name: "booking_code"
+        type: "varchar"
+        length: 12
+        is_unique: true
+        is_nullable: false
+        comment: "Human-readable, e.g., 'NT-2405A7X'"
+      - name: "customer_id"
+        type: "varchar"
+        length: 26
+        is_nullable: true
+        comment: "NULL untuk guest booking"
+      - name: "guest_email"
+        type: "varchar"
+        length: 320
+        is_nullable: true
+      - name: "guest_phone"
+        type: "varchar"
+        length: 16
+        is_nullable: true
+      - name: "booking_status"
+        type: "varchar"
+        length: 20
+        is_nullable: false
+        default: "draft"
+        comment: "draft | dp_paid | confirmed | cancelled | auto_cancelled"
+      - name: "payment_mode"
+        type: "varchar"
+        length: 10
+        is_nullable: false
+        comment: "full | dp"
+      - name: "dp_percentage"
+        type: "decimal"
+        precision: 5
+        scale: 2
+        is_nullable: true
+        comment: "Persentase DP, e.g., 30.00"
+      - name: "dp_amount"
+        type: "decimal"
+        precision: 12
+        scale: 2
+        is_nullable: true
+      - name: "total_amount"
+        type: "decimal"
+        precision: 12
+        scale: 2
+        is_nullable: false
+      - name: "settlement_deadline"
+        type: "timestamptz"
+        is_nullable: true
+        comment: "Deadline pelunasan untuk booking DP"
+      - name: "sales_channel_id"
+        type: "varchar"
+        length: 26
+        is_nullable: true
+      - name: "voucher_id"
+        type: "varchar"
+        length: 26
+        is_nullable: true
+      - name: "voucher_discount_amount"
+        type: "decimal"
+        precision: 12
+        scale: 2
+        is_nullable: true
+      - name: "created_by"
+        type: "varchar"
+        length: 26
+        is_nullable: true
+        comment: "FK ke User (CS Agent jika booking manual)"
+      - name: "cancelled_at"
+        type: "timestamptz"
+        is_nullable: true
+      - name: "cancellation_reason"
+        type: "text"
+        is_nullable: true
+      - name: "created_at"
+        type: "timestamptz"
+        is_nullable: false
+        default: "NOW()"
+      - name: "updated_at"
+        type: "timestamptz"
+        is_nullable: false
+        default: "NOW()"
+    relations:
+      - type: "ManyToOne"
+        target_entity: "Tenant"
+        join_column: "tenant_id"
+        inverse_side: "bookings"
+        on_delete: "CASCADE"
+      - type: "ManyToOne"
+        target_entity: "User"
+        join_column: "customer_id"
+        inverse_side: "bookings_as_customer"
+        on_delete: "SET NULL"
+      - type: "ManyToOne"
+        target_entity: "SalesChannel"
+        join_column: "sales_channel_id"
+        inverse_side: "bookings"
+        on_delete: "SET NULL"
+      - type: "ManyToOne"
+        target_entity: "Voucher"
+        join_column: "voucher_id"
+        inverse_side: "bookings"
+        on_delete: "SET NULL"
+      - type: "OneToMany"
+        target_entity: "BookingItem"
+        inverse_side: "booking"
+        on_delete: "CASCADE"
+      - type: "OneToMany"
+        target_entity: "Passenger"
+        inverse_side: "booking"
+        on_delete: "CASCADE"
+      - type: "OneToMany"
+        target_entity: "PaymentIntent"
+        inverse_side: "booking"
+        on_delete: "RESTRICT"
+      - type: "OneToMany"
+        target_entity: "Refund"
+        inverse_side: "booking"
+        on_delete: "RESTRICT"
+
+  - entity_name: "BookingItem"
+    table_name: "booking_items"
+    is_isolated: true
+    description: "Item individual dalam satu booking (tiket, paket, rental, hotel, transfer)."
+    columns:
+      - name: "id"
+        type: "varchar"
+        length: 26
+        is_primary: true
+        comment: "ULID format"
+      - name: "booking_id"
+        type: "varchar"
+        length: 26
+        is_nullable: false
+      - name: "item_type"
+        type: "varchar"
+        length: 20
+        is_nullable: false
+        comment: "trip | tour | rental | hotel | transfer | shuttle"
+      - name: "reference_id"
+        type: "varchar"
+        length: 26
+        is_nullable: false
+        comment: "FK ke entity terkait (TripSchedule, TourPackage, Vehicle, HotelRoomType, dll)"
+      - name: "reference_id_type"
+        type: "varchar"
+        length: 30
+        is_nullable: false
+        comment: "Nama entity yang direferensi (polymorphic FK)"
+      - name: "quantity"
+        type: "int"
+        is_nullable: false
+        default: 1
+      - name: "unit_price"
+        type: "decimal"
+        precision: 12
+        scale: 2
+        is_nullable: false
+      - name: "subtotal"
+        type: "decimal"
+        precision: 12
+        scale: 2
+        is_nullable: false
+      - name: "start_date"
+        type: "date"
+        is_nullable: true
+        comment: "Untuk rental/hotel: tanggal mulai"
+      - name: "end_date"
+        type: "date"
+        is_nullable: true
+        comment: "Untuk rental/hotel: tanggal selesai"
+      - name: "created_at"
+        type: "timestamptz"
+        is_nullable: false
+        default: "NOW()"
+    relations:
+      - type: "ManyToOne"
+        target_entity: "Booking"
+        join_column: "booking_id"
+        inverse_side: "booking_items"
+        on_delete: "CASCADE"
+      - type: "OneToMany"
+        target_entity: "Passenger"
+        inverse_side: "booking_item"
+        on_delete: "CASCADE"
+
+  - entity_name: "Passenger"
+    table_name: "passengers"
+    is_isolated: true
+    description: "Data penumpang dalam booking (manifest)."
+    columns:
+      - name: "id"
+        type: "varchar"
+        length: 26
+        is_primary: true
+        comment: "ULID format"
+      - name: "booking_id"
+        type: "varchar"
+        length: 26
+        is_nullable: false
+      - name: "booking_item_id"
+        type: "varchar"
+        length: 26
+        is_nullable: false
+      - name: "full_name"
+        type: "varchar"
+        length: 200
+        is_nullable: false
+      - name: "id_type"
+        type: "varchar"
+        length: 20
+        is_nullable: true
+        comment: "ktp | passport | sim | none"
+      - name: "id_number"
+        type: "varchar"
+        length: 50
+        is_nullable: true
+      - name: "seat_code"
+        type: "varchar"
+        length: 10
+        is_nullable: true
+        comment: "e.g., 'A1', 'B3' — NULL untuk non-trip item"
+      - name: "fare_type"
+        type: "varchar"
+        length: 10
+        is_nullable: false
+        default: "adult"
+        comment: "adult | child | infant"
+      - name: "ticket_qr_code"
+        type: "varchar"
+        length: 255
+        is_nullable: true
+        comment: "QR code unik untuk boarding"
+      - name: "ticket_qr_generated_at"
+        type: "timestamptz"
+        is_nullable: true
+      - name: "boarding_status"
+        type: "varchar"
+        length: 20
+        is_nullable: true
+        comment: "not_checked | checked_in | boarded | no_show"
+      - name: "created_at"
+        type: "timestamptz"
+        is_nullable: false
+        default: "NOW()"
+    relations:
+      - type: "ManyToOne"
+        target_entity: "Booking"
+        join_column: "booking_id"
+        inverse_side: "passengers"
+        on_delete: "CASCADE"
+      - type: "ManyToOne"
+        target_entity: "BookingItem"
+        join_column: "booking_item_id"
+        inverse_side: "passengers"
+        on_delete: "CASCADE"
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # PAYMENT & FINANCIAL ENGINE
+  # ──────────────────────────────────────────────────────────────────────────
+
+  - entity_name: "PaymentGatewayConfig"
+    table_name: "payment_gateway_configs"
+    is_isolated: true
+    description: "Konfigurasi payment gateway per tenant."
+    columns:
+      - name: "id"
+        type: "varchar"
+        length: 26
+        is_primary: true
+        comment: "ULID format"
+      - name: "tenant_id"
+        type: "varchar"
+        length: 26
+        is_nullable: false
+      - name: "gateway_code"
+        type: "varchar"
+        length: 20
+        is_nullable: false
+        comment: "midtrans | xendit | doku | stripe"
+      - name: "api_key_encrypted"
+        type: "text"
+        is_nullable: false
+        comment: "Encrypted server key / API key"
+      - name: "client_key_encrypted"
+        type: "text"
+        is_nullable: true
+      - name: "webhook_secret_encrypted"
+        type: "text"
+        is_nullable: true
+      - name: "is_active"
+        type: "boolean"
+        is_nullable: false
+        default: true
+      - name: "supported_methods"
+        type: "jsonb"
+        is_nullable: true
+        comment: '["va", "qris", "ewallet", "credit_card", "bank_transfer"]'
+      - name: "created_at"
+        type: "timestamptz"
+        is_nullable: false
+        default: "NOW()"
+      - name: "updated_at"
+        type: "timestamptz"
+        is_nullable: false
+        default: "NOW()"
+    relations:
+      - type: "ManyToOne"
+        target_entity: "Tenant"
+        join_column: "tenant_id"
+        inverse_side: "payment_gateway_configs"
+        on_delete: "CASCADE"
+
+  - entity_name: "PaymentIntent"
+    table_name: "payment_intents"
+    is_isolated: true
+    description: "Intensi pembayaran untuk booking (DP, pelunasan, full payment, deposit)."
+    columns:
+      - name: "id"
+        type: "varchar"
+        length: 26
+        is_primary: true
+        comment: "ULID format"
+      - name: "booking_id"
+        type: "varchar"
+        length: 26
+        is_nullable: false
+      - name: "intent_type"
+        type: "varchar"
+        length: 20
+        is_nullable: false
+        comment: "dp | settlement | full | deposit_hold | deposit_release | deposit_deduct"
+      - name: "gateway_code"
+        type: "varchar"
+        length: 20
+        is_nullable: false
+      - name: "method_type"
+        type: "varchar"
+        length: 20
+        is_nullable: false
+        comment: "va | qris | ewallet | credit_card | bank_transfer"
+      - name: "amount"
+        type: "decimal"
+        precision: 12
+        scale: 2
+        is_nullable: false
+      - name: "gateway_intent_id"
+        type: "varchar"
+        length: 255
+        is_nullable: true
+        comment: "ID dari gateway (e.g., Midtrans order_id)"
+      - name: "va_number"
+        type: "varchar"
+        length: 50
+        is_nullable: true
+      - name: "va_bank"
+        type: "varchar"
+        length: 20
+        is_nullable: true
+        comment: "bca | bni | bri | mandiri"
+      - name: "qris_url"
+        type: "varchar"
+        length: 500
+        is_nullable: true
+      - name: "payment_url"
+        type: "varchar"
+        length: 500
+        is_nullable: true
+        comment: "URL redirect untuk pembayaran (credit card, e-wallet)"
+      - name: "status"
+        type: "varchar"
+        length: 20
+        is_nullable: false
+        default: "pending"
+        comment: "pending | paid | expired | failed | refunded"
+      - name: "expires_at"
+        type: "timestamptz"
+        is_nullable: false
+      - name: "paid_at"
+        type: "timestamptz"
+        is_nullable: true
+      - name: "created_at"
+        type: "timestamptz"
+        is_nullable: false
+        default: "NOW()"
+    relations:
+      - type: "ManyToOne"
+        target_entity: "Booking"
+        join_column: "booking_id"
+        inverse_side: "payment_intents"
+        on_delete: "RESTRICT"
+      - type: "OneToMany"
+        target_entity: "PaymentTransaction"
+        inverse_side: "payment_intent"
+        on_delete: "RESTRICT"
+
+  - entity_name: "PaymentTransaction"
+    table_name: "payment_transactions"
+    is_isolated: true
+    description: "Transaksi pembayaran aktual yang diterima dari gateway."
+    columns:
+      - name: "id"
+        type: "varchar"
+        length: 26
+        is_primary: true
+        comment: "ULID format"
+      - name: "payment_intent_id"
+        type: "varchar"
+        length: 26
+        is_nullable: false
+      - name: "gateway_transaction_id"
+        type: "varchar"
+        length: 255
+        is_nullable: false
+        comment: "Transaction ID dari gateway"
+      - name: "amount_received"
+        type: "decimal"
+        precision: 12
+        scale: 2
+        is_nullable: false
+      - name: "payment_method_detail"
+        type: "varchar"
+        length: 100
+        is_nullable: true
+        comment: "e.g., 'bca_va', 'gopay', 'shopeepay'"
+      - name: "status"
+        type: "varchar"
+        length: 20
+        is_nullable: false
+        comment: "confirmed | failed | refunded | chargeback"
+      - name: "paid_at"
+        type: "timestamptz"
+        is_nullable: false
+      - name: "raw_webhook_payload"
+        type: "jsonb"
+        is_nullable: true
+        comment: "Full webhook payload dari gateway untuk audit trail"
+      - name: "created_at"
+        type: "timestamptz"
+        is_nullable: false
+        default: "NOW()"
+    relations:
+      - type: "ManyToOne"
+        target_entity: "PaymentIntent"
+        join_column: "payment_intent_id"
+        inverse_side: "payment_transactions"
+        on_delete: "RESTRICT"
+
+  - entity_name: "Refund"
+    table_name: "refunds"
+    is_isolated: true
+    description: "Pengajuan dan pemrosesan refund."
+    columns:
+      - name: "id"
+        type: "varchar"
+        length: 26
+        is_primary: true
+        comment: "ULID format"
+      - name: "booking_id"
+        type: "varchar"
+        length: 26
+        is_nullable: false
+      - name: "refund_type"
+        type: "varchar"
+        length: 10
+        is_nullable: false
+        comment: "partial | full"
+      - name: "refund_amount"
+        type: "decimal"
+        precision: 12
+        scale: 2
+        is_nullable: false
+      - name: "reason"
+        type: "text"
+        is_nullable: false
+      - name: "status"
+        type: "varchar"
+        length: 20
+        is_nullable: false
+        default: "requested"
+        comment: "requested | approved | rejected | completed"
+      - name: "requested_by"
+        type: "varchar"
+        length: 26
+        is_nullable: false
+        comment: "FK ke User yang mengajukan refund"
+      - name: "approved_by"
+        type: "varchar"
+        length: 26
+        is_nullable: true
+        comment: "FK ke User (tenant_owner/operations_manager yang approve)"
+      - name: "approved_at"
+        type: "timestamptz"
+        is_nullable: true
+      - name: "rejection_reason"
+        type: "text"
+        is_nullable: true
+      - name: "gateway_refund_id"
+        type: "varchar"
+        length: 255
+        is_nullable: true
+      - name: "completed_at"
+        type: "timestamptz"
+        is_nullable: true
+      - name: "created_at"
+        type: "timestamptz"
+        is_nullable: false
+        default: "NOW()"
+    relations:
+      - type: "ManyToOne"
+        target_entity: "Booking"
+        join_column: "booking_id"
+        inverse_side: "refunds"
+        on_delete: "RESTRICT"
+      - type: "ManyToOne"
+        target_entity: "User"
+        join_column: "requested_by"
+        inverse_side: "refunds_requested"
+        on_delete: "RESTRICT"
+      - type: "ManyToOne"
+        target_entity: "User"
+        join_column: "approved_by"
+        inverse_side: "refunds_approved"
+        on_delete: "SET NULL"
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # SALES CHANNEL & COMMISSION
+  # ──────────────────────────────────────────────────────────────────────────
+
+  - entity_name: "SalesChannel"
+    table_name: "sales_channels"
+    is_isolated: true
+    description: "Channel penjualan (website sendiri, agen mitra, marketplace, dll)."
+    columns:
+      - name: "id"
+        type: "varchar"
+        length: 26
+        is_primary: true
+        comment: "ULID format"
+      - name: "tenant_id"
+        type: "varchar"
+        length: 26
+        is_nullable: false
+      - name: "channel_code"
+        type: "varchar"
+        length: 30
+        is_nullable: false
+        comment: "e.g., 'direct_web', 'agent_partner', 'marketplace'"
+      - name: "channel_name"
+        type: "varchar"
+        length: 100
+        is_nullable: false
+      - name: "is_active"
+        type: "boolean"
+        is_nullable: false
+        default: true
+      - name: "created_at"
+        type: "timestamptz"
+        is_nullable: false
+        default: "NOW()"
+    relations:
+      - type: "ManyToOne"
+        target_entity: "Tenant"
+        join_column: "tenant_id"
+        inverse_side: "sales_channels"
+        on_delete: "CASCADE"
+      - type: "OneToMany"
+        target_entity: "Booking"
+        inverse_side: "sales_channel"
+        on_delete: "RESTRICT"
+      - type: "OneToMany"
+        target_entity: "CommissionRule"
+        inverse_side: "sales_channel"
+        on_delete: "CASCADE"
+
+  - entity_name: "CommissionRule"
+    table_name: "commission_rules"
+    is_isolated: true
+    description: "Aturan markup dan komisi per channel penjualan."
+    columns:
+      - name: "id"
+        type: "varchar"
+        length: 26
+        is_primary: true
+        comment: "ULID format"
+      - name: "tenant_id"
+        type: "varchar"
+        length: 26
+        is_nullable: false
+      - name: "sales_channel_id"
+        type: "varchar"
+        length: 26
+        is_nullable: false
+      - name: "rule_type"
+        type: "varchar"
+        length: 20
+        is_nullable: false
+        comment: "markup | commission | flat_fee"
+      - name: "value"
+        type: "decimal"
+        precision: 5
+        scale: 2
+        is_nullable: false
+        comment: "Persentase atau nominal"
+      - name: "is_percentage"
+        type: "boolean"
+        is_nullable: false
+        default: true
+        comment: "true = persentase, false = nominal flat"
+      - name: "applies_to"
+        type: "varchar"
+        length: 30
+        is_nullable: false
+        default: "all"
+        comment: "all | trip | tour | rental | hotel | transfer"
+      - name: "is_active"
+        type: "boolean"
+        is_nullable: false
+        default: true
+      - name: "created_at"
+        type: "timestamptz"
+        is_nullable: false
+        default: "NOW()"
+      - name: "updated_at"
+        type: "timestamptz"
+        is_nullable: false
+        default: "NOW()"
+    relations:
+      - type: "ManyToOne"
+        target_entity: "Tenant"
+        join_column: "tenant_id"
+        inverse_side: "commission_rules"
+        on_delete: "CASCADE"
+      - type: "ManyToOne"
+        target_entity: "SalesChannel"
+        join_column: "sales_channel_id"
+        inverse_side: "commission_rules"
+        on_delete: "CASCADE"
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # PRICING ENGINE
+  # ──────────────────────────────────────────────────────────────────────────
+
+  - entity_name: "PricingRule"
+    table_name: "pricing_rules"
+    is_isolated: true
+    description: "Aturan harga dinamis (seasonal, early bird, holiday surcharge)."
+    columns:
+      - name: "id"
+        type: "varchar"
+        length: 26
+        is_primary: true
+        comment: "ULID format"
+      - name: "tenant_id"
+        type: "varchar"
+        length: 26
+        is_nullable: false
+      - name: "rule_type"
+        type: "varchar"
+        length: 30
+        is_nullable: false
+        comment: "seasonal_surcharge | holiday_surcharge | early_bird_discount | weekend_surcharge"
+      - name: "adjustment_type"
+        type: "varchar"
+        length: 10
+        is_nullable: false
+        comment: "percentage | fixed"
+      - name: "adjustment_value"
+        type: "decimal"
+        precision: 12
+        scale: 2
+        is_nullable: false
+        comment: "Positif = surcharge, negatif = discount"
+      - name: "applies_to_type"
+        type: "varchar"
+        length: 20
+        is_nullable: false
+        comment: "route | product | all"
+      - name: "applies_to_id"
+        type: "varchar"
+        length: 26
+        is_nullable: true
+        comment: "FK ke Route atau entity produk"
+      - name: "start_date"
+        type: "date"
+        is_nullable: false
+      - name: "end_date"
+        type: "date"
+        is_nullable: false
+      - name: "days_before_departure_min"
+        type: "int"
+        is_nullable: true
+        comment: "Untuk early bird: minimal hari sebelum keberangkatan"
+      - name: "is_active"
+        type: "boolean"
+        is_nullable: false
+        default: true
+      - name: "created_at"
+        type: "timestamptz"
+        is_nullable: false
+        default: "NOW()"
+      - name: "updated_at"
+        type: "timestamptz"
+        is_nullable: false
+        default: "NOW()"
+    relations:
+      - type: "ManyToOne"
+        target_entity: "Tenant"
+        join_column: "tenant_id"
+        inverse_side: "pricing_rules"
+        on_delete: "CASCADE"
+
+  - entity_name: "FareConfig"
+    table_name: "fare_configs"
+    is_isolated: true
+    description: "Konfigurasi tarif khusus (child/infant fare)."
+    columns:
+      - name: "id"
+        type: "varchar"
+        length: 26
+        is_primary: true
+        comment: "ULID format"
+      - name: "tenant_id"
+        type: "varchar"
+        length: 26
+        is_nullable: false
+      - name: "fare_type"
+        type: "varchar"
+        length: 10
+        is_nullable: false
+        comment: "child | infant"
+      - name: "discount_percentage"
+        type: "decimal"
+        precision: 5
+        scale: 2
+        is_nullable: false
+        comment: "e.g., 50.00 = 50% dari harga adult"
+      - name: "age_min"
+        type: "int"
+        is_nullable: true
+      - name: "age_max"
+        type: "int"
+        is_nullable: true
+      - name: "is_active"
+        type: "boolean"
+        is_nullable: false
+        default: true
+      - name: "created_at"
+        type: "timestamptz"
+        is_nullable: false
+        default: "NOW()"
+    relations:
+      - type: "ManyToOne"
+        target_entity: "Tenant"
+        join_column: "tenant_id"
+        inverse_side: "fare_configs"
+        on_delete: "CASCADE"
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # TOUR PACKAGE & ITINERARY
+  # ──────────────────────────────────────────────────────────────────────────
+
+  - entity_name: "TourPackage"
+    table_name: "tour_packages"
+    is_isolated: true
+    description: "Paket wisata yang dijual oleh tenant agen."
+    columns:
+      - name: "id"
+        type: "varchar"
+        length: 26
+        is_primary: true
+        comment: "ULID format"
+      - name: "tenant_id"
+        type: "varchar"
+        length: 26
+        is_nullable: false
+      - name: "package_name"
+        type: "varchar"
+        length: 200
+        is_nullable: false
+      - name: "slug"
+        type: "varchar"
+        length: 250
+        is_unique: true
+        is_nullable: false
+      - name: "description"
+        type: "text"
+        is_nullable: true
+      - name: "duration_days"
+        type: "int"
+        is_nullable: false
+      - name: "duration_nights"
+        type: "int"
+        is_nullable: false
+      - name: "inclusions"
+        type: "jsonb"
+        is_nullable: true
+        comment: '["Transportasi AC", "Hotel bintang 3", "Makan 3x sehari", "Tour guide"]'
+      - name: "exclusions"
+        type: "jsonb"
+        is_nullable: true
+        comment: '["Tiket pesawat", "Pengeluaran pribadi", "Asuransi"]'
+      - name: "pricing_type"
+        type: "varchar"
+        length: 20
+        is_nullable: false
+        comment: "per_person | per_group | private"
+      - name: "price"
+        type: "decimal"
+        precision: 12
+        scale: 2
+        is_nullable: false
+      - name: "min_pax"
+        type: "int"
+        is_nullable: false
+        default: 1
+      - name: "max_pax"
+        type: "int"
+        is_nullable: true
+      - name: "dp_percentage"
+        type: "decimal"
+        precision: 5
+        scale: 2
+        is_nullable: false
+        default: 30.00
+      - name: "status"
+        type: "varchar"
+        length: 20
+        is_nullable: false
+        default: "draft"
+        comment: "draft | published | archived"
+      - name: "cover_image_url"
+        type: "varchar"
+        length: 500
+        is_nullable: true
+      - name: "created_at"
+        type: "timestamptz"
+        is_nullable: false
+        default: "NOW()"
+      - name: "updated_at"
+        type: "timestamptz"
+        is_nullable: false
+        default: "NOW()"
+    relations:
+      - type: "ManyToOne"
+        target_entity: "Tenant"
+        join_column: "tenant_id"
+        inverse_side: "tour_packages"
+        on_delete: "CASCADE"
+      - type: "OneToMany"
+        target_entity: "TourItinerary"
+        inverse_side: "tour_package"
+        on_delete: "CASCADE"
+      - type: "OneToMany"
+        target_entity: "TourPackageComponent"
+        inverse_side: "tour_package"
+        on_delete: "CASCADE"
+      - type: "OneToMany"
+        target_entity: "TourDeparture"
+        inverse_side: "tour_package"
+        on_delete: "CASCADE"
+      - type: "OneToMany"
+        target_entity: "TourPackageImage"
+        inverse_side: "tour_package"
+        on_delete: "CASCADE"
+
+  - entity_name: "TourItinerary"
+    table_name: "tour_itineraries"
+    is_isolated: true
+    description: "Day-by-day itinerary dalam paket wisata."
+    columns:
+      - name: "id"
+        type: "varchar"
+        length: 26
+        is_primary: true
+        comment: "ULID format"
+      - name: "tour_package_id"
+        type: "varchar"
+        length: 26
+        is_nullable: false
+      - name: "day_number"
+        type: "int"
+        is_nullable: false
+      - name: "title"
+        type: "varchar"
+        length: 200
+        is_nullable: false
+        comment: "e.g., 'Hari 1: Jakarta - Bandung - Lembang'"
+      - name: "description"
+        type: "text"
+        is_nullable: true
+      - name: "activities"
+        type: "jsonb"
+        is_nullable: true
+        comment: '[{"time": "08:00", "activity": "Penjemputan di hotel", "location": "Jakarta"}, ...]'
+      - name: "meals_included"
+        type: "jsonb"
+        is_nullable: true
+        comment: '["breakfast", "lunch", "dinner"]'
+      - name: "accommodation"
+        type: "varchar"
+        length: 200
+        is_nullable: true
+      - name: "sort_order"
+        type: "int"
+        is_nullable: false
+        default: 0
+      - name: "created_at"
+        type: "timestamptz"
+        is_nullable: false
+        default: "NOW()"
+    relations:
+      - type: "ManyToOne"
+        target_entity: "TourPackage"
+        join_column: "tour_package_id"
+        inverse_side: "itineraries"
+        on_delete: "CASCADE"
+
+  - entity_name: "TourPackageComponent"
+    table_name: "tour_package_components"
+    is_isolated: true
+    description: "Komponen bundling dalam paket wisata (transportasi, hotel, aktivitas)."
+    columns:
+      - name: "id"
+        type: "varchar"
+        length: 26
+        is_primary: true
+        comment: "ULID format"
+      - name: "tour_package_id"
+        type: "varchar"
+        length: 26
+        is_nullable: false
+      - name: "component_type"
+        type: "varchar"
+        length: 20
+        is_nullable: false
+        comment: "transportation | hotel | activity | meal | guide"
+      - name: "reference_id"
+        type: "varchar"
+        length: 26
+        is_nullable: false
+        comment: "FK ke TripSchedule, HotelRoomType, atau entity lain"
+      - name: "reference_id_type"
+        type: "varchar"
+        length: 30
+        is_nullable: false
+      - name: "quantity"
+        type: "int"
+        is_nullable: false
+        default: 1
+      - name: "unit_cost"
+        type: "decimal"
+        precision: 12
+        scale: 2
+        is_nullable: false
+        comment: "Harga internal/cost untuk komponen ini"
+      - name: "created_at"
+        type: "timestamptz"
+        is_nullable: false
+        default: "NOW()"
+    relations:
+      - type: "ManyToOne"
+        target_entity: "TourPackage"
+        join_column: "tour_package_id"
+        inverse_side: "components"
+        on_delete: "CASCADE"
+
+  - entity_name: "TourDeparture"
+    table_name: "tour_departures"
+    is_isolated: true
+    description: "Slot keberangkatan yang tersedia untuk paket wisata."
+    columns:
+      - name: "id"
+        type: "varchar"
+        length: 26
+        is_primary: true
+        comment: "ULID format"
+      - name: "tour_package_id"
+        type: "varchar"
+        length: 26
+        is_nullable: false
+      - name: "departure_date"
+        type: "date"
+        is_nullable: false
+      - name: "total_slots"
+        type: "int"
+        is_nullable: false
+        comment: "Maksimum pax untuk keberangkatan ini"
+      - name: "booked_slots"
+        type: "int"
+        is_nullable: false
+        default: 0
+      - name: "price_override"
+        type: "decimal"
+        precision: 12
+        scale: 2
+        is_nullable: true
+        comment: "Harga khusus untuk keberangkatan ini (NULL = pakai harga paket)"
+      - name: "status"
+        type: "varchar"
+        length: 20
+        is_nullable: false
+        default: "available"
+        comment: "available | full | cancelled | completed"
+      - name: "created_at"
+        type: "timestamptz"
+        is_nullable: false
+        default: "NOW()"
+    relations:
+      - type: "ManyToOne"
+        target_entity: "TourPackage"
+        join_column: "tour_package_id"
+        inverse_side: "departures"
+        on_delete: "CASCADE"
+
+  - entity_name: "TourPackageImage"
+    table_name: "tour_package_images"
+    is_isolated: true
+    description: "Foto galeri untuk paket wisata."
+    columns:
+      - name: "id"
+        type: "varchar"
+        length: 26
+        is_primary: true
+        comment: "ULID format"
+      - name: "tour_package_id"
+        type: "varchar"
+        length: 26
+        is_nullable: false
+      - name: "image_url"
+        type: "varchar"
+        length: 500
+        is_nullable: false
+      - name: "caption"
+        type: "varchar"
+        length: 300
+        is_nullable: true
+      - name: "sort_order"
+        type: "int"
+        is_nullable: false
+        default: 0
+      - name: "created_at"
+        type: "timestamptz"
+        is_nullable: false
+        default: "NOW()"
+    relations:
+      - type: "ManyToOne"
+        target_entity: "TourPackage"
+        join_column: "tour_package_id"
+        inverse_side: "images"
+        on_delete: "CASCADE"
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # VEHICLE RENTAL MANAGEMENT
+  # ──────────────────────────────────────────────────────────────────────────
+
+  - entity_name: "RentalVehicle"
+    table_name: "rental_vehicles"
+    is_isolated: true
+    description: "Katalog kendaraan yang disewakan (bisa berbeda dari Vehicle operasional)."
+    columns:
+      - name: "id"
+        type: "varchar"
+        length: 26
+        is_primary: true
+        comment: "ULID format"
+      - name: "tenant_id"
+        type: "varchar"
+        length: 26
+        is_nullable: false
+      - name: "vehicle_id"
+        type: "varchar"
+        length: 26
+        is_nullable: true
+        comment: "Link ke Vehicle jika kendaraan yang sama"
+      - name: "name"
+        type: "varchar"
+        length: 200
+        is_nullable: false
+        comment: "e.g., 'Avanza 2024', 'Innova Reborn', 'Hiace Commuter'"
+      - name: "vehicle_type"
+        type: "varchar"
+        length: 30
+        is_nullable: false
+      - name: "transmission"
+        type: "varchar"
+        length: 10
+        is_nullable: false
+        comment: "manual | automatic"
+      - name: "capacity"
+        type: "int"
+        is_nullable: false
+      - name: "with_driver_available"
+        type: "boolean"
+        is_nullable: false
+        default: true
+      - name: "without_driver_available"
+        type: "boolean"
+        is_nullable: false
+        default: true
+      - name: "daily_rate"
+        type: "decimal"
+        precision: 12
+        scale: 2
+        is_nullable: false
+      - name: "weekly_rate"
+        type: "decimal"
+        precision: 12
+        scale: 2
+        is_nullable: true
+      - name: "monthly_rate"
+        type: "decimal"
+        precision: 12
+        scale: 2
+        is_nullable: true
+      - name: "dp_percentage"
+        type: "decimal"
+        precision: 5
+        scale: 2
+        is_nullable: false
+        default: 30.00
+      - name: "deposit_amount"
+        type: "decimal"
+        precision: 12
+        scale: 2
+        is_nullable: false
+        comment: "Jumlah deposit yang di-hold saat rental"
+      - name: "status"
+        type: "varchar"
+        length: 20
+        is_nullable: false
+        default: "available"
+        comment: "available | rented | maintenance | inactive"
+      - name: "image_url"
+        type: "varchar"
+        length: 500
+        is_nullable: true
+      - name: "created_at"
+        type: "timestamptz"
+        is_nullable: false
+        default: "NOW()"
+      - name: "updated_at"
+        type: "timestamptz"
+        is_nullable: false
+        default: "NOW()"
+    relations:
+      - type: "ManyToOne"
+        target_entity: "Tenant"
+        join_column: "tenant_id"
+        inverse_side: "rental_vehicles"
+        on_delete: "CASCADE"
+      - type: "ManyToOne"
+        target_entity: "Vehicle"
+        join_column: "vehicle_id"
+        inverse_side: "rental_listing"
+        on_delete: "SET NULL"
+
+  - entity_name: "RentalContract"
+    table_name: "rental_contracts"
+    is_isolated: true
+    description: "Kontrak digital untuk penyewaan kendaraan."
+    columns:
+      - name: "id"
+        type: "varchar"
+        length: 26
+        is_primary: true
+        comment: "ULID format"
+      - name: "booking_id"
+        type: "varchar"
+        length: 26
+        is_nullable: false
+      - name: "contract_number"
+        type: "varchar"
+        length: 50
+        is_unique: true
+        is_nullable: false
+      - name: "contract_url"
+        type: "varchar"
+        length: 500
+        is_nullable: true
+      - name: "e_signature_provider"
+        type: "varchar"
+        length: 30
+        is_nullable: true
+        comment: "e.g., 'privy', 'digisign', 'docusign'"
+      - name: "e_signature_envelope_id"
+        type: "varchar"
+        length: 255
+        is_nullable: true
+      - name: "signed_by_customer_at"
+        type: "timestamptz"
+        is_nullable: true
+      - name: "signed_by_tenant_at"
+        type: "timestamptz"
+        is_nullable: true
+      - name: "status"
+        type: "varchar"
+        length: 20
+        is_nullable: false
+        default: "draft"
+        comment: "draft | sent | signed_by_customer | signed_by_both | expired"
+      - name: "created_at"
+        type: "timestamptz"
+        is_nullable: false
+        default: "NOW()"
+    relations:
+      - type: "ManyToOne"
+        target_entity: "Booking"
+        join_column: "booking_id"
+        inverse_side: "rental_contracts"
+        on_delete: "RESTRICT"
+
+  - entity_name: "RentalConditionPhoto"
+    table_name: "rental_condition_photos"
+    is_isolated: true
+    description: "Foto kondisi kendaraan sebelum dan sesudah rental."
+    columns:
+      - name: "id"
+        type: "varchar"
+        length: 26
+        is_primary: true
+        comment: "ULID format"
+      - name: "booking_id"
+        type: "varchar"
+        length: 26
+        is_nullable: false
+      - name: "photo_type"
+        type: "varchar"
+        length: 20
+        is_nullable: false
+        comment: "pre_rental | post_rental"
+      - name: "photo_url"
+        type: "varchar"
+        length: 500
+        is_nullable: false
+      - name: "section"
+        type: "varchar"
+        length: 30
+        is_nullable: false
+        comment: "exterior_front | exterior_rear | exterior_left | exterior_right | interior_dashboard | interior_seats | interior_trunk"
+      - name: "notes"
+        type: "text"
+        is_nullable: true
+        comment: "Catatan kerusakan atau kondisi khusus"
+      - name: "taken_by"
+        type: "varchar"
+        length: 26
+        is_nullable: false
+        comment: "FK ke User (CS Agent)"
+      - name: "created_at"
+        type: "timestamptz"
+        is_nullable: false
+        default: "NOW()"
+    relations:
+      - type: "ManyToOne"
+        target_entity: "Booking"
+        join_column: "booking_id"
+        inverse_side: "condition_photos"
+        on_delete: "CASCADE"
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # AIRPORT TRANSFER & SHUTTLE
+  # ──────────────────────────────────────────────────────────────────────────
+
+  - entity_name: "AirportTransfer"
+    table_name: "airport_transfers"
+    is_isolated: true
+    description: "Layanan transfer bandara (arrival/departure)."
+    columns:
+      - name: "id"
+        type: "varchar"
+        length: 26
+        is_primary: true
+        comment: "ULID format"
+      - name: "tenant_id"
+        type: "varchar"
+        length: 26
+        is_nullable: false
+      - name: "transfer_type"
+        type: "varchar"
+        length: 10
+        is_nullable: false
+        comment: "arrival | departure"
+      - name: "airport_location_id"
+        type: "varchar"
+        length: 26
+        is_nullable: false
+        comment: "FK ke Location (airport)"
+      - name: "pickup_or_dropoff_location_id"
+        type: "varchar"
+        length: 26
+        is_nullable: false
+        comment: "FK ke Location (hotel, rumah, kantor)"
+      - name: "vehicle_type_options"
+        type: "jsonb"
+        is_nullable: false
+        comment: '[{"type": "sedan", "max_pax": 3, "price": 150000}, {"type": "mpv", "max_pax": 5, "price": 250000}]'
+      - name: "flight_number"
+        type: "varchar"
+        length: 20
+        is_nullable: true
+      - name: "is_active"
+        type: "boolean"
+        is_nullable: false
+        default: true
+      - name: "created_at"
+        type: "timestamptz"
+        is_nullable: false
+        default: "NOW()"
+    relations:
+      - type: "ManyToOne"
+        target_entity: "Tenant"
+        join_column: "tenant_id"
+        inverse_side: "airport_transfers"
+        on_delete: "CASCADE"
+      - type: "ManyToOne"
+        target_entity: "Location"
+        join_column: "airport_location_id"
+        inverse_side: "transfers_from_airport"
+        on_delete: "RESTRICT"
+      - type: "ManyToOne"
+        target_entity: "Location"
+        join_column: "pickup_or_dropoff_location_id"
+        inverse_side: "transfers_to_location"
+        on_delete: "RESTRICT"
+
+  - entity_name: "ShuttleSchedule"
+    table_name: "shuttle_schedules"
+    is_isolated: true
+    description: "Jadwal shuttle tetap dengan titik keberangkatan dan waktu terdefinisi."
+    columns:
+      - name: "id"
+        type: "varchar"
+        length: 26
+        is_primary: true
+        comment: "ULID format"
+      - name: "tenant_id"
+        type: "varchar"
+        length: 26
+        is_nullable: false
+      - name: "route_id"
+        type: "varchar"
+        length: 26
+        is_nullable: false
+      - name: "departure_point_location_id"
+        type: "varchar"
+        length: 26
+        is_nullable: false
+      - name: "arrival_point_location_id"
+        type: "varchar"
+        length: 26
+        is_nullable: false
+      - name: "departure_time"
+        type: "time"
+        is_nullable: false
+        comment: "Waktu keberangkatan harian, e.g., '08:00'"
+      - name: "vehicle_id"
+        type: "varchar"
+        length: 26
+        is_nullable: true
+      - name: "price"
+        type: "decimal"
+        precision: 12
+        scale: 2
+        is_nullable: false
+      - name: "days_of_week"
+        type: "jsonb"
+        is_nullable: false
+        comment: '[1, 2, 3, 4, 5, 6, 7] — 1=Senin, 7=Minggu'
+      - name: "is_active"
+        type: "boolean"
+        is_nullable: false
+        default: true
+      - name: "created_at"
+        type: "timestamptz"
+        is_nullable: false
+        default: "NOW()"
+    relations:
+      - type: "ManyToOne"
+        target_entity: "Tenant"
+        join_column: "tenant_id"
+        inverse_side: "shuttle_schedules"
+        on_delete: "CASCADE"
+      - type: "ManyToOne"
+        target_entity: "Route"
+        join_column: "route_id"
+        inverse_side: "shuttle_schedules"
+        on_delete: "RESTRICT"
+      - type: "ManyToOne"
+        target_entity: "Location"
+        join_column: "departure_point_location_id"
+        inverse_side: "shuttle_departures"
+        on_delete: "RESTRICT"
+      - type: "ManyToOne"
+        target_entity: "Location"
+        join_column: "arrival_point_location_id"
+        inverse_side: "shuttle_arrivals"
+        on_delete: "RESTRICT"
+      - type: "ManyToOne"
+        target_entity: "Vehicle"
+        join_column: "vehicle_id"
+        inverse_side: "shuttle_schedules"
+        on_delete: "SET NULL"
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # HOTEL & ACCOMMODATION
+  # ──────────────────────────────────────────────────────────────────────────
+
+  - entity_name: "HotelProperty"
+    table_name: "hotel_properties"
+    is_isolated: true
+    description: "Properti hotel yang dikelola tenant agen."
+    columns:
+      - name: "id"
+        type: "varchar"
+        length: 26
+        is_primary: true
+        comment: "ULID format"
+      - name: "tenant_id"
+        type: "varchar"
+        length: 26
+        is_nullable: false
+      - name: "property_name"
+        type: "varchar"
+        length: 200
+        is_nullable: false
+      - name: "slug"
+        type: "varchar"
+        length: 250
+        is_unique: true
+        is_nullable: false
+      - name: "address"
+        type: "text"
+        is_nullable: false
+      - name: "location_id"
+        type: "varchar"
+        length: 26
+        is_nullable: true
+        comment: "FK ke Location (kota/wilayah)"
+      - name: "star_rating"
+        type: "int"
+        is_nullable: true
+        comment: "1-5"
+      - name: "description"
+        type: "text"
+        is_nullable: true
+      - name: "facilities"
+        type: "jsonb"
+        is_nullable: true
+        comment: '["wifi", "pool", "gym", "restaurant", "spa", "parking"]'
+      - name: "check_in_time"
+        type: "time"
+        is_nullable: false
+        default: "14:00"
+      - name: "check_out_time"
+        type: "time"
+        is_nullable: false
+        default: "12:00"
+      - name: "cancellation_policy"
+        type: "jsonb"
+        is_nullable: true
+        comment: '[{"days_before": 7, "refund_percentage": 100}, {"days_before": 3, "refund_percentage": 50}, {"days_before": 0, "refund_percentage": 0}]'
+      - name: "no_show_fee_percentage"
+        type: "decimal"
+        precision: 5
+        scale: 2
+        is_nullable: false
+        default: 100.00
+      - name: "cover_image_url"
+        type: "varchar"
+        length: 500
+        is_nullable: true
+      - name: "status"
+        type: "varchar"
+        length: 20
+        is_nullable: false
+        default: "active"
+        comment: "active | inactive | archived"
+      - name: "created_at"
+        type: "timestamptz"
+        is_nullable: false
+        default: "NOW()"
+      - name: "updated_at"
+        type: "timestamptz"
+        is_nullable: false
+        default: "NOW()"
+    relations:
+      - type: "ManyToOne"
+        target_entity: "Tenant"
+        join_column: "tenant_id"
+        inverse_side: "hotel_properties"
+        on_delete: "CASCADE"
+      - type: "ManyToOne"
+        target_entity: "Location"
+        join_column: "location_id"
+        inverse_side: "hotels"
+        on_delete: "SET NULL"
+      - type: "OneToMany"
+        target_entity: "HotelRoomType"
+        inverse_side: "property"
+        on_delete: "CASCADE"
+
+  - entity_name: "HotelRoomType"
+    table_name: "hotel_room_types"
+    is_isolated: true
+    description: "Tipe kamar dalam properti hotel."
+    columns:
+      - name: "id"
+        type: "varchar"
+        length: 26
+        is_primary: true
+        comment: "ULID format"
+      - name: "property_id"
+        type: "varchar"
+        length: 26
+        is_nullable: false
+      - name: "room_type_name"
+        type: "varchar"
+        length: 100
+        is_nullable: false
+        comment: "e.g., 'Deluxe Room', 'Superior Room', 'Family Suite'"
+      - name: "description"
+        type: "text"
+        is_nullable: true
+      - name: "base_price"
+        type: "decimal"
+        precision: 12
+        scale: 2
+        is_nullable: false
+      - name: "capacity"
+        type: "int"
+        is_nullable: false
+        comment: "Maksimum tamu per kamar"
+      - name: "total_rooms"
+        type: "int"
+        is_nullable: false
+        comment: "Total kamar tipe ini di properti"
+      - name: "bed_type"
+        type: "varchar"
+        length: 30
+        is_nullable: true
+        comment: "single | twin | double | queen | king"
+      - name: "amenities"
+        type: "jsonb"
+        is_nullable: true
+        comment: '["ac", "tv", "hot_water", "balcony", "mini_bar"]'
+      - name: "image_url"
+        type: "varchar"
+        length: 500
+        is_nullable: true
+      - name: "is_active"
+        type: "boolean"
+        is_nullable: false
+        default: true
+      - name: "created_at"
+        type: "timestamptz"
+        is_nullable: false
+        default: "NOW()"
+      - name: "updated_at"
+        type: "timestamptz"
+        is_nullable: false
+        default: "NOW()"
+    relations:
+      - type: "ManyToOne"
+        target_entity: "HotelProperty"
+        join_column: "property_id"
+        inverse_side: "room_types"
+        on_delete: "CASCADE"
+      - type: "OneToMany"
+        target_entity: "HotelRatePlan"
+        inverse_side: "room_type"
+        on_delete: "CASCADE"
+
+  - entity_name: "HotelRatePlan"
+    table_name: "hotel_rate_plans"
+    is_isolated: true
+    description: "Rate plan musiman untuk tipe kamar hotel."
+    columns:
+      - name: "id"
+        type: "varchar"
+        length: 26
+        is_primary: true
+        comment: "ULID format"
+      - name: "room_type_id"
+        type: "varchar"
+        length: 26
+        is_nullable: false
+      - name: "plan_name"
+        type: "varchar"
+        length: 100
+        is_nullable: false
+        comment: "e.g., 'Low Season', 'High Season', 'Peak Season', 'Lebaran Rate'"
+      - name: "price_override"
+        type: "decimal"
+        precision: 12
+        scale: 2
+        is_nullable: false
+      - name: "start_date"
+        type: "date"
+        is_nullable: false
+      - name: "end_date"
+        type: "date"
+        is_nullable: false
+      - name: "is_active"
+        type: "boolean"
+        is_nullable: false
+        default: true
+      - name: "created_at"
+        type: "timestamptz"
+        is_nullable: false
+        default: "NOW()"
+    relations:
+      - type: "ManyToOne"
+        target_entity: "HotelRoomType"
+        join_column: "room_type_id"
+        inverse_side: "rate_plans"
+        on_delete: "CASCADE"
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # PROMOTIONS & VOUCHER
+  # ──────────────────────────────────────────────────────────────────────────
+
+  - entity_name: "Voucher"
+    table_name: "vouchers"
+    is_isolated: true
+    description: "Kode promo/voucher yang dibuat tenant."
+    columns:
+      - name: "id"
+        type: "varchar"
+        length: 26
+        is_primary: true
+        comment: "ULID format"
+      - name: "tenant_id"
+        type: "varchar"
+        length: 26
+        is_nullable: false
+      - name: "voucher_code"
+        type: "varchar"
+        length: 30
+        is_nullable: false
+        comment: "Unique per tenant, e.g., 'LEBARAN20'"
+      - name: "voucher_name"
+        type: "varchar"
+        length: 200
+        is_nullable: false
+      - name: "description"
+        type: "text"
+        is_nullable: true
+      - name: "discount_type"
+        type: "varchar"
+        length: 15
+        is_nullable: false
+        comment: "fixed | percentage | free_service"
+      - name: "discount_value"
+        type: "decimal"
+        precision: 12
+        scale: 2
+        is_nullable: false
+        comment: "Nominal (jika fixed) atau persentase (jika percentage)"
+      - name: "min_booking_amount"
+        type: "decimal"
+        precision: 12
+        scale: 2
+        is_nullable: true
+        comment: "Minimum total booking agar voucher berlaku"
+      - name: "max_discount_amount"
+        type: "decimal"
+        precision: 12
+        scale: 2
+        is_nullable: true
+        comment: "Cap maksimum diskon (untuk percentage)"
+      - name: "max_usage_total"
+        type: "int"
+        is_nullable: false
+        comment: "Batas total penggunaan voucher"
+      - name: "max_usage_per_user"
+        type: "int"
+        is_nullable: false
+        default: 1
+      - name: "valid_from"
+        type: "timestamptz"
+        is_nullable: false
+      - name: "valid_until"
+        type: "timestamptz"
+        is_nullable: false
+      - name: "applies_to"
+        type: "varchar"
+        length: 30
+        is_nullable: false
+        default: "all"
+        comment: "all | trip | tour | rental | hotel | transfer"
+      - name: "status"
+        type: "varchar"
+        length: 20
+        is_nullable: false
+        default: "active"
+        comment: "active | expired | disabled"
+      - name: "created_by"
+        type: "varchar"
+        length: 26
+        is_nullable: false
+        comment: "FK ke User (marketing_staff)"
+      - name: "created_at"
+        type: "timestamptz"
+        is_nullable: false
+        default: "NOW()"
+      - name: "updated_at"
+        type: "timestamptz"
+        is_nullable: false
+        default: "NOW()"
+    relations:
+      - type: "ManyToOne"
+        target_entity: "Tenant"
+        join_column: "tenant_id"
+        inverse_side: "vouchers"
+        on_delete: "CASCADE"
+      - type: "OneToMany"
+        target_entity: "VoucherUsage"
+        inverse_side: "voucher"
+        on_delete: "RESTRICT"
+      - type: "OneToMany"
+        target_entity: "Booking"
+        inverse_side: "voucher"
+        on_delete: "SET NULL"
+
+  - entity_name: "VoucherUsage"
+    table_name: "voucher_usages"
+    is_isolated: true
+    description: "Tracking penggunaan voucher oleh user."
+    columns:
+      - name: "id"
+        type: "varchar"
+        length: 26
+        is_primary: true
+        comment: "ULID format"
+      - name: "voucher_id"
+        type: "varchar"
+        length: 26
+        is_nullable: false
+      - name: "user_id"
+        type: "varchar"
+        length: 26
+        is_nullable: true
+        comment: "NULL untuk guest"
+      - name: "booking_id"
+        type: "varchar"
+        length: 26
+        is_nullable: false
+      - name: "discount_amount"
+        type: "decimal"
+        precision: 12
+        scale: 2
+        is_nullable: false
+      - name: "created_at"
+        type: "timestamptz"
+        is_nullable: false
+        default: "NOW()"
+    relations:
+      - type: "ManyToOne"
+        target_entity: "Voucher"
+        join_column: "voucher_id"
+        inverse_side: "usages"
+        on_delete: "RESTRICT"
+      - type: "ManyToOne"
+        target_entity: "User"
+        join_column: "user_id"
+        inverse_side: "voucher_usages"
+        on_delete: "SET NULL"
+      - type: "ManyToOne"
+        target_entity: "Booking"
+        join_column: "booking_id"
+        inverse_side: "voucher_usages"
+        on_delete: "CASCADE"
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # NOTIFICATIONS & COMMUNICATIONS
+  # ──────────────────────────────────────────────────────────────────────────
+
+  - entity_name: "NotificationTemplate"
+    table_name: "notification_templates"
+    is_isolated: true
+    description: "Template notifikasi yang bisa dikustomisasi per tenant."
+    columns:
+      - name: "id"
+        type: "varchar"
+        length: 26
+        is_primary: true
+        comment: "ULID format"
+      - name: "tenant_id"
+        type: "varchar"
+        length: 26
+        is_nullable: false
+      - name: "template_code"
+        type: "varchar"
+        length: 50
+        is_nullable: false
+        comment: "e.g., 'booking_confirmation', 'dp_reminder', 'settlement_reminder', 'eticket'"
+      - name: "channel"
+        type: "varchar"
+        length: 10
+        is_nullable: false
+        comment: "email | whatsapp | sms"
+      - name: "subject"
+        type: "varchar"
+        length: 300
+        is_nullable: true
+        comment: "Untuk email"
+      - name: "body_template"
+        type: "text"
+        is_nullable: false
+        comment: "Template dengan placeholder {{variable}}"
+      - name: "is_custom"
+        type: "boolean"
+        is_nullable: false
+        default: false
+        comment: "true = sudah dikustomisasi tenant, false = default sistem"
+      - name: "created_at"
+        type: "timestamptz"
+        is_nullable: false
+        default: "NOW()"
+      - name: "updated_at"
+        type: "timestamptz"
+        is_nullable: false
+        default: "NOW()"
+    relations:
+      - type: "ManyToOne"
+        target_entity: "Tenant"
+        join_column: "tenant_id"
+        inverse_side: "notification_templates"
+        on_delete: "CASCADE"
+
+  - entity_name: "NotificationLog"
+    table_name: "notification_logs"
+    is_isolated: true
+    description: "Log pengiriman notifikasi ke customer."
+    columns:
+      - name: "id"
+        type: "varchar"
+        length: 26
+        is_primary: true
+        comment: "ULID format"
+      - name: "tenant_id"
+        type: "varchar"
+        length: 26
+        is_nullable: false
+      - name: "booking_id"
+        type: "varchar"
+        length: 26
+        is_nullable: true
+      - name: "recipient_address"
+        type: "varchar"
+        length: 320
+        is_nullable: false
+        comment: "Email atau nomor telepon"
+      - name: "channel"
+        type: "varchar"
+        length: 10
+        is_nullable: false
+        comment: "email | whatsapp | sms"
+      - name: "template_code"
+        type: "varchar"
+        length: 50
+        is_nullable: false
+      - name: "status"
+        type: "varchar"
+        length: 20
+        is_nullable: false
+        comment: "sent | delivered | read | failed"
+      - name: "provider_message_id"
+        type: "varchar"
+        length: 255
+        is_nullable: true
+      - name: "error_message"
+        type: "text"
+        is_nullable: true
+      - name: "sent_at"
+        type: "timestamptz"
+        is_nullable: false
+        default: "NOW()"
+    relations:
+      - type: "ManyToOne"
+        target_entity: "Tenant"
+        join_column: "tenant_id"
+        inverse_side: "notification_logs"
+        on_delete: "CASCADE"
+      - type: "ManyToOne"
+        target_entity: "Booking"
+        join_column: "booking_id"
+        inverse_side: "notification_logs"
+        on_delete: "SET NULL"
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # CRM & CUSTOMER MANAGEMENT
+  # ──────────────────────────────────────────────────────────────────────────
+
+  - entity_name: "Review"
+    table_name: "reviews"
+    is_isolated: true
+    description: "Review dan rating customer setelah perjalanan."
+    columns:
+      - name: "id"
+        type: "varchar"
+        length: 26
+        is_primary: true
+        comment: "ULID format"
+      - name: "tenant_id"
+        type: "varchar"
+        length: 26
+        is_nullable: false
+      - name: "booking_id"
+        type: "varchar"
+        length: 26
+        is_nullable: false
+      - name: "user_id"
+        type: "varchar"
+        length: 26
+        is_nullable: false
+      - name: "rating"
+        type: "int"
+        is_nullable: false
+        comment: "1-5"
+      - name: "comment"
+        type: "text"
+        is_nullable: true
+      - name: "status"
+        type: "varchar"
+        length: 20
+        is_nullable: false
+        default: "pending"
+        comment: "pending | approved | rejected"
+      - name: "moderated_by"
+        type: "varchar"
+        length: 26
+        is_nullable: true
+      - name: "moderated_at"
+        type: "timestamptz"
+        is_nullable: true
+      - name: "tenant_response"
+        type: "text"
+        is_nullable: true
+        comment: "Balasan dari tenant terhadap review"
+      - name: "tenant_responded_at"
+        type: "timestamptz"
+        is_nullable: true
+      - name: "created_at"
+        type: "timestamptz"
+        is_nullable: false
+        default: "NOW()"
+    relations:
+      - type: "ManyToOne"
+        target_entity: "Tenant"
+        join_column: "tenant_id"
+        inverse_side: "reviews"
+        on_delete: "CASCADE"
+      - type: "ManyToOne"
+        target_entity: "Booking"
+        join_column: "booking_id"
+        inverse_side: "reviews"
+        on_delete: "CASCADE"
+      - type: "ManyToOne"
+        target_entity: "User"
+        join_column: "user_id"
+        inverse_side: "reviews_written"
+        on_delete: "CASCADE"
+
+  - entity_name: "Complaint"
+    table_name: "complaints"
+    is_isolated: true
+    description: "Sistem tiket komplain dan dispute."
+    columns:
+      - name: "id"
+        type: "varchar"
+        length: 26
+        is_primary: true
+        comment: "ULID format"
+      - name: "tenant_id"
+        type: "varchar"
+        length: 26
+        is_nullable: false
+      - name: "booking_id"
+        type: "varchar"
+        length: 26
+        is_nullable: true
+      - name: "user_id"
+        type: "varchar"
+        length: 26
+        is_nullable: false
+        comment: "Customer yang komplain"
+      - name: "ticket_number"
+        type: "varchar"
+        length: 20
+        is_unique: true
+        is_nullable: false
+        comment: "e.g., 'CMP-2405001'"
+      - name: "subject"
+        type: "varchar"
+        length: 300
+        is_nullable: false
+      - name: "description"
+        type: "text"
+        is_nullable: false
+      - name: "category"
+        type: "varchar"
+        length: 30
+        is_nullable: false
+        comment: "service | refund | baggage | delay | safety | other"
+      - name: "priority"
+        type: "varchar"
+        length: 10
+        is_nullable: false
+        default: "medium"
+        comment: "low | medium | high | urgent"
+      - name: "status"
+        type: "varchar"
+        length: 20
+        is_nullable: false
+        default: "open"
+        comment: "open | in_progress | waiting_customer | resolved | closed"
+      - name: "assigned_to"
+        type: "varchar"
+        length: 26
+        is_nullable: true
+        comment: "FK ke User (CS Agent yang menangani)"
+      - name: "resolved_at"
+        type: "timestamptz"
+        is_nullable: true
+      - name: "created_at"
+        type: "timestamptz"
+        is_nullable: false
+        default: "NOW()"
+      - name: "updated_at"
+        type: "timestamptz"
+        is_nullable: false
+        default: "NOW()"
+    relations:
+      - type: "ManyToOne"
+        target_entity: "Tenant"
+        join_column: "tenant_id"
+        inverse_side: "complaints"
+        on_delete: "CASCADE"
+      - type: "ManyToOne"
+        target_entity: "Booking"
+        join_column: "booking_id"
+        inverse_side: "complaints"
+        on_delete: "SET NULL"
+      - type: "ManyToOne"
+        target_entity: "User"
+        join_column: "user_id"
+        inverse_side: "complaints_filed"
+        on_delete: "CASCADE"
+      - type: "ManyToOne"
+        target_entity: "User"
+        join_column: "assigned_to"
+        inverse_side: "complaints_assigned"
+        on_delete: "SET NULL"
+      - type: "OneToMany"
+        target_entity: "ComplaintResponse"
+        inverse_side: "complaint"
+        on_delete: "CASCADE"
+
+  - entity_name: "ComplaintResponse"
+    table_name: "complaint_responses"
+    is_isolated: true
+    description: "Respons/tanggapan dalam tiket komplain."
+    columns:
+      - name: "id"
+        type: "varchar"
+        length: 26
+        is_primary: true
+        comment: "ULID format"
+      - name: "complaint_id"
+        type: "varchar"
+        length: 26
+        is_nullable: false
+      - name: "responder_id"
+        type: "varchar"
+        length: 26
+        is_nullable: false
+        comment: "FK ke User (CS Agent atau Customer)"
+      - name: "message"
+        type: "text"
+        is_nullable: false
+      - name: "is_internal_note"
+        type: "boolean"
+        is_nullable: false
+        default: false
+        comment: "true = hanya visible ke internal CS, false = visible ke customer"
+      - name: "created_at"
+        type: "timestamptz"
+        is_nullable: false
+        default: "NOW()"
+    relations:
+      - type: "ManyToOne"
+        target_entity: "Complaint"
+        join_column: "complaint_id"
+        inverse_side: "responses"
+        on_delete: "CASCADE"
+      - type: "ManyToOne"
+        target_entity: "User"
+        join_column: "responder_id"
+        inverse_side: "complaint_responses"
+        on_delete: "CASCADE"
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # VENDOR & PARTNER MANAGEMENT
+  # ──────────────────────────────────────────────────────────────────────────
+
+  - entity_name: "Vendor"
+    table_name: "vendors"
+    is_isolated: true
+    description: "Mitra penyedia layanan pihak ketiga."
+    columns:
+      - name: "id"
+        type: "varchar"
+        length: 26
+        is_primary: true
+        comment: "ULID format"
+      - name: "tenant_id"
+        type: "varchar"
+        length: 26
+        is_nullable: false
+      - name: "vendor_name"
+        type: "varchar"
+        length: 200
+        is_nullable: false
+      - name: "vendor_code"
+        type: "varchar"
+        length: 30
+        is_nullable: false
+        comment: "Unique per tenant"
+      - name: "contact_person_name"
+        type: "varchar"
+        length: 200
+        is_nullable: false
+      - name: "contact_email"
+        type: "varchar"
+        length: 320
+        is_nullable: false
+      - name: "contact_phone"
+        type: "varchar"
+        length: 16
+        is_nullable: false
+      - name: "address"
+        type: "text"
+        is_nullable: true
+      - name: "bank_name"
+        type: "varchar"
+        length: 50
+        is_nullable: true
+      - name: "bank_account_number"
+        type: "varchar"
+        length: 30
+        is_nullable: true
+      - name: "bank_account_holder"
+        type: "varchar"
+        length: 200
+        is_nullable: true
+      - name: "contract_url"
+        type: "varchar"
+        length: 500
+        is_nullable: true
+      - name: "commission_percentage"
+        type: "decimal"
+        precision: 5
+        scale: 2
+        is_nullable: false
+        default: 0.00
+      - name: "status"
+        type: "varchar"
+        length: 20
+        is_nullable: false
+        default: "active"
+        comment: "active | inactive"
+      - name: "created_at"
+        type: "timestamptz"
+        is_nullable: false
+        default: "NOW()"
+      - name: "updated_at"
+        type: "timestamptz"
+        is_nullable: false
+        default: "NOW()"
+    relations:
+      - type: "ManyToOne"
+        target_entity: "Tenant"
+        join_column: "tenant_id"
+        inverse_side: "vendors"
+        on_delete: "CASCADE"
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # AUDIT & COMPLIANCE
+  # ──────────────────────────────────────────────────────────────────────────
+
+  - entity_name: "AuditLog"
+    table_name: "audit_logs"
+    is_isolated: false  # Global — mencakup semua tenant
+    description: "Log audit immutable untuk semua aksi user. Append-only."
+    columns:
+      - name: "id"
+        type: "varchar"
+        length: 26
+        is_primary: true
+        comment: "ULID format"
+      - name: "user_id"
+        type: "varchar"
+        length: 26
+        is_nullable: false
+      - name: "tenant_id"
+        type: "varchar"
+        length: 26
+        is_nullable: true
+        comment: "NULL untuk aksi SaaS-level"
+      - name: "action"
+        type: "varchar"
+        length: 50
+        is_nullable: false
+        comment: "e.g., 'booking.create', 'user.login', 'payment.confirm'"
+      - name: "resource_type"
+        type: "varchar"
+        length: 50
+        is_nullable: false
+        comment: "e.g., 'Booking', 'User', 'PaymentIntent'"
+      - name: "resource_id"
+        type: "varchar"
+        length: 26
+        is_nullable: false
+      - name: "old_values"
+        type: "jsonb"
+        is_nullable: true
+      - name: "new_values"
+        type: "jsonb"
+        is_nullable: true
+      - name: "ip_address"
+        type: "varchar"
+        length: 45
+        is_nullable: true
+      - name: "user_agent"
+        type: "varchar"
+        length: 500
+        is_nullable: true
+      - name: "created_at"
+        type: "timestamptz"
+        is_nullable: false
+        default: "NOW()"
+    relations:
+      - type: "ManyToOne"
+        target_entity: "User"
+        join_column: "user_id"
+        inverse_side: "audit_logs"
+        on_delete: "RESTRICT"
+      - type: "ManyToOne"
+        target_entity: "Tenant"
+        join_column: "tenant_id"
+        inverse_side: "audit_logs"
+        on_delete: "SET NULL"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# INITIAL SEEDERS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+seeders:
+  - entity_name: "Tenant"
+    description: "Default SaaS platform tenant (representasi platform itu sendiri)."
+    records:
+      - id: "01J00000000000000000000001"
+        tenant_code: "nusatravel-platform"
+        legal_name: "NusaTravel Platform"
+        business_type: "mixed"
+        kyb_status: "approved"
+        subscription_tier: "enterprise"
+        subscription_status: "active"
+        contact_email: "platform@nusatravel.id"
+        country: "ID"
+
+  - entity_name: "User"
+    description: "Super Admin awal untuk mengelola seluruh platform SaaS."
+    records:
+      - id: "01J00000000000000000000002"
+        tenant_id: null
+        email: "superadmin@nusatravel.id"
+        phone_e164: null
+        password_hash: "<bcrypt_hash_of_initial_password>"
+        full_name: "Super Admin NusaTravel"
+        status: "active"
+        email_verified_at: "2026-05-16T00:00:00Z"
+        failed_login_attempts: 0
+        two_factor_enabled: false
+        created_at: "2026-05-16T00:00:00Z"
+        updated_at: "2026-05-16T00:00:00Z"
+
+  - entity_name: "Role"
+    description: "Global SaaS-level roles (tidak terikat tenant)."
+    records:
+      - id: "01J00000000000000000000003"
+        tenant_id: null
+        role_code: "super_admin"
+        role_name: "Super Admin"
+        description: "Admin level SaaS: mengelola seluruh platform, onboarding tenant, konfigurasi global."
+        is_system_role: true
+      - id: "01J00000000000000000000004"
+        tenant_id: null
+        role_code: "saas_support_agent"
+        role_name: "SaaS Support Agent"
+        description: "Dukungan teknis & operasional kepada tenant; eskalasi tiket."
+        is_system_role: true
+      - id: "01J00000000000000000000005"
+        tenant_id: null
+        role_code: "saas_billing_admin"
+        role_name: "SaaS Billing Admin"
+        description: "Mengelola invoice tenant, pembayaran subscription, dispute resolution."
+        is_system_role: true
+      - id: "01J00000000000000000000006"
+        tenant_id: null
+        role_code: "saas_product_manager"
+        role_name: "SaaS Product Manager"
+        description: "Konfigurasi feature flags per tier, manajemen changelog."
+        is_system_role: true
+
+  - entity_name: "Role"
+    description: "Default tenant-level roles (template yang akan di-copy saat tenant baru dibuat)."
+    records:
+      - id: "01J00000000000000000000007"
+        tenant_id: "01J00000000000000000000001"
+        role_code: "tenant_owner"
+        role_name: "Tenant Owner"
+        description: "Pemilik akun bisnis: akses penuh semua modul, kelola user internal."
+        is_system_role: true
+      - id: "01J00000000000000000000008"
+        tenant_id: "01J00000000000000000000001"
+        role_code: "operations_manager"
+        role_name: "Operations Manager"
+        description: "Mengelola jadwal perjalanan, armada, pengemudi, rute, kapasitas."
+        is_system_role: true
+      - id: "01J00000000000000000000009"
+        tenant_id: "01J00000000000000000000001"
+        role_code: "finance_staff"
+        role_name: "Finance Staff"
+        description: "Rekonsiliasi pembayaran, manajemen DP & pelunasan, laporan keuangan."
+        is_system_role: true
+      - id: "01J0000000000000000000000A"
+        tenant_id: "01J00000000000000000000001"
+        role_code: "booking_staff_cs"
+        role_name: "Booking Staff / CS Agent"
+        description: "Input pemesanan manual, modifikasi & pembatalan booking."
+        is_system_role: true
+      - id: "01J0000000000000000000000B"
+        tenant_id: "01J00000000000000000000001"
+        role_code: "driver_operator"
+        role_name: "Driver / Operator"
+        description: "Akses jadwal perjalanan pribadi, update status perjalanan."
+        is_system_role: true
+      - id: "01J0000000000000000000000C"
+        tenant_id: "01J00000000000000000000001"
+        role_code: "fleet_supervisor"
+        role_name: "Fleet Supervisor"
+        description: "Monitor jadwal maintenance kendaraan, assign driver."
+        is_system_role: true
+      - id: "01J0000000000000000000000D"
+        tenant_id: "01J00000000000000000000001"
+        role_code: "marketing_staff"
+        role_name: "Marketing Staff"
+        description: "Buat & kelola promo/voucher, campaign, konten paket wisata."
+        is_system_role: true
+      - id: "01J0000000000000000000000E"
+        tenant_id: "01J00000000000000000000001"
+        role_code: "registered_customer"
+        role_name: "Registered Customer (B2C)"
+        description: "Cari & pesan tiket, paket wisata, rental, hotel. Default role saat registrasi."
+        is_system_role: true
+      - id: "01J0000000000000000000000F"
+        tenant_id: "01J00000000000000000000001"
+        role_code: "corporate_booker"
+        role_name: "Corporate Booker (B2B)"
+        description: "Pesan perjalanan bisnis, akses corporate rate."
+        is_system_role: true
+
+  - entity_name: "UserRole"
+    description: "Assign Super Admin role ke user super admin."
+    records:
+      - id: "01J00000000000000000000010"
+        user_id: "01J00000000000000000000002"
+        role_id: "01J00000000000000000000003"
+        created_at: "2026-05-16T00:00:00Z"
+
+  - entity_name: "Permission"
+    description: "Permission atomik untuk seluruh resource dan aksi di platform."
+    records:
+      # Tenant Management
+      - id: "01J00000000000000000000011"
+        permission_code: "tenant.read"
+        resource: "tenant"
+        action: "read"
+        description: "Melihat data tenant"
+      - id: "01J00000000000000000000012"
+        permission_code: "tenant.create"
+        resource: "tenant"
+        action: "create"
+        description: "Membuat tenant baru"
+      - id: "01J00000000000000000000013"
+        permission_code: "tenant.update"
+        resource: "tenant"
+        action: "update"
+        description: "Mengupdate data tenant"
+      - id: "01J00000000000000000000014"
+        permission_code: "tenant.manage"
+        resource: "tenant"
+        action: "manage"
+        description: "Suspend/activate tenant, kelola subscription"
+      # Booking
+      - id: "01J00000000000000000000015"
+        permission_code: "booking.read"
+        resource: "booking"
+        action: "read"
+        description: "Melihat data booking"
+      - id: "01J00000000000000000000016"
+        permission_code: "booking.create"
+        resource: "booking"
+        action: "create"
+        description: "Membuat booking baru"
+      - id: "01J00000000000000000000017"
+        permission_code: "booking.update"
+        resource: "booking"
+        action: "update"
+        description: "Modifikasi booking"
+      - id: "01J00000000000000000000018"
+        permission_code: "booking.cancel"
+        resource: "booking"
+        action: "delete"
+        description: "Membatalkan booking"
+      - id: "01J00000000000000000000019"
+        permission_code: "booking.approve"
+        resource: "booking"
+        action: "approve"
+        description: "Approval group booking"
+      # Payment
+      - id: "01J0000000000000000000001A"
+        permission_code: "payment.read"
+        resource: "payment"
+        action: "read"
+        description: "Melihat data pembayaran"
+      - id: "01J0000000000000000000001B"
+        permission_code: "payment.reconcile"
+        resource: "payment"
+        action: "manage"
+        description: "Rekonsiliasi pembayaran"
+      - id: "01J0000000000000000000001C"
+        permission_code: "payment.refund"
+        resource: "payment"
+        action: "approve"
+        description: "Memproses refund"
+      # Fleet
+      - id: "01J0000000000000000000001D"
+        permission_code: "fleet.read"
+        resource: "fleet"
+        action: "read"
+        description: "Melihat data armada"
+      - id: "01J0000000000000000000001E"
+        permission_code: "fleet.create"
+        resource: "fleet"
+        action: "create"
+        description: "Mendaftarkan kendaraan baru"
+      - id: "01J0000000000000000000001F"
+        permission_code: "fleet.update"
+        resource: "fleet"
+        action: "update"
+        description: "Mengupdate data kendaraan"
+      - id: "01J00000000000000000000020"
+        permission_code: "fleet.manage"
+        resource: "fleet"
+        action: "manage"
+        description: "Assign kendaraan & driver ke jadwal"
+      # Driver
+      - id: "01J00000000000000000000021"
+        permission_code: "driver.read"
+        resource: "driver"
+        action: "read"
+        description: "Melihat data pengemudi"
+      - id: "01J00000000000000000000022"
+        permission_code: "driver.create"
+        resource: "driver"
+        action: "create"
+        description: "Onboarding pengemudi baru"
+      - id: "01J00000000000000000000023"
+        permission_code: "driver.update"
+        resource: "driver"
+        action: "update"
+        description: "Mengupdate data pengemudi"
+      # Tour
+      - id: "01J00000000000000000000024"
+        permission_code: "tour.read"
+        resource: "tour"
+        action: "read"
+        description: "Melihat paket wisata"
+      - id: "01J00000000000000000000025"
+        permission_code: "tour.create"
+        resource: "tour"
+        action: "create"
+        description: "Membuat paket wisata baru"
+      - id: "01J00000000000000000000026"
+        permission_code: "tour.update"
+        resource: "tour"
+        action: "update"
+        description: "Mengupdate paket wisata"
+      - id: "01J00000000000000000000027"
+        permission_code: "tour.manage"
+        resource: "tour"
+        action: "manage"
+        description: "Publish/archive paket wisata"
+      # Rental
+      - id: "01J00000000000000000000028"
+        permission_code: "rental.read"
+        resource: "rental"
+        action: "read"
+        description: "Melihat katalog rental"
+      - id: "01J00000000000000000000029"
+        permission_code: "rental.create"
+        resource: "rental"
+        action: "create"
+        description: "Mendaftarkan kendaraan rental"
+      - id: "01J0000000000000000000002A"
+        permission_code: "rental.update"
+        resource: "rental"
+        action: "update"
+        description: "Mengupdate data rental"
+      - id: "01J0000000000000000000002B"
+        permission_code: "rental.manage"
+        resource: "rental"
+        action: "manage"
+        description: "Kelola kontrak & deposit rental"
+      # Hotel
+      - id: "01J0000000000000000000002C"
+        permission_code: "hotel.read"
+        resource: "hotel"
+        action: "read"
+        description: "Melihat data hotel"
+      - id: "01J0000000000000000000002D"
+        permission_code: "hotel.create"
+        resource: "hotel"
+        action: "create"
+        description: "Mendaftarkan properti hotel"
+      - id: "01J0000000000000000000002E"
+        permission_code: "hotel.update"
+        resource: "hotel"
+        action: "update"
+        description: "Mengupdate data hotel"
+      # Report
+      - id: "01J0000000000000000000002F"
+        permission_code: "report.read"
+        resource: "report"
+        action: "read"
+        description: "Melihat laporan"
+      - id: "01J00000000000000000000030"
+        permission_code: "report.export"
+        resource: "report"
+        action: "export"
+        description: "Ekspor laporan ke Excel/CSV/PDF"
+      # User Management
+      - id: "01J00000000000000000000031"
+        permission_code: "user.read"
+        resource: "user"
+        action: "read"
+        description: "Melihat data user"
+      - id: "01J00000000000000000000032"
+        permission_code: "user.create"
+        resource: "user"
+        action: "create"
+        description: "Mengundang/membuat user baru"
+      - id: "01J00000000000000000000033"
+        permission_code: "user.update"
+        resource: "user"
+        action: "update"
+        description: "Mengupdate data user"
+      - id: "01J00000000000000000000034"
+        permission_code: "user.manage"
+        resource: "user"
+        action: "manage"
+        description: "Assign role, forced logout, suspend user"
+      # RBAC
+      - id: "01J00000000000000000000035"
+        permission_code: "rbac.manage"
+        resource: "rbac"
+        action: "manage"
+        description: "Konfigurasi role & permission"
+      # Audit
+      - id: "01J00000000000000000000036"
+        permission_code: "audit.read"
+        resource: "audit"
+        action: "read"
+        description: "Melihat audit log"
+      # Vendor
+      - id: "01J00000000000000000000037"
+        permission_code: "vendor.read"
+        resource: "vendor"
+        action: "read"
+        description: "Melihat data vendor"
+      - id: "01J00000000000000000000038"
+        permission_code: "vendor.create"
+        resource: "vendor"
+        action: "create"
+        description: "Onboarding vendor baru"
+      - id: "01J00000000000000000000039"
+        permission_code: "vendor.update"
+        resource: "vendor"
+        action: "update"
+        description: "Mengupdate data vendor"
+      # Pricing
+      - id: "01J0000000000000000000003A"
+        permission_code: "pricing.manage"
+        resource: "pricing"
+        action: "manage"
+        description: "Konfigurasi harga, seasonal pricing, commission rules"
+      # Promo
+      - id: "01J0000000000000000000003B"
+        permission_code: "promo.create"
+        resource: "promo"
+        action: "create"
+        description: "Membuat voucher/promo"
+      - id: "01J0000000000000000000003C"
+        permission_code: "promo.manage"
+        resource: "promo"
+        action: "manage"
+        description: "Mengelola voucher (enable/disable/expire)"
+      # Notification
+      - id: "01J0000000000000000000003D"
+        permission_code: "notification.manage"
+        resource: "notification"
+        action: "manage"
+        description: "Konfigurasi template notifikasi"
+      # CRM
+      - id: "01J0000000000000000000003E"
+        permission_code: "crm.read"
+        resource: "crm"
+        action: "read"
+        description: "Melihat profil & histori customer"
+      - id: "01J0000000000000000000003F"
+        permission_code: "crm.manage"
+        resource: "crm"
+        action: "manage"
+        description: "Moderasi review, kelola komplain"
+      # SaaS Analytics
+      - id: "01J00000000000000000000040"
+        permission_code: "saas.analytics"
+        resource: "saas"
+        action: "read"
+        description: "Melihat SaaS-level analytics (tenant growth, GMV, churn)"
+
+  - entity_name: "RolePermission"
+    description: "Assign semua permission ke Super Admin (full access)."
+    records:
+      # Super Admin gets ALL permissions
+      - id: "01J00000000000000000000041"
+        role_id: "01J00000000000000000000003"
+        permission_id: "01J00000000000000000000011"
+      - id: "01J00000000000000000000042"
+        role_id: "01J00000000000000000000003"
+        permission_id: "01J00000000000000000000012"
+      - id: "01J00000000000000000000043"
+        role_id: "01J00000000000000000000003"
+        permission_id: "01J00000000000000000000013"
+      - id: "01J00000000000000000000044"
+        role_id: "01J00000000000000000000003"
+        permission_id: "01J00000000000000000000014"
+      - id: "01J00000000000000000000045"
+        role_id: "01J00000000000000000000003"
+        permission_id: "01J00000000000000000000015"
+      - id: "01J00000000000000000000046"
+        role_id: "01J00000000000000000000003"
+        permission_id: "01J00000000000000000000016"
+      - id: "01J00000000000000000000047"
+        role_id: "01J00000000000000000000003"
+        permission_id: "01J00000000000000000000017"
+      - id: "01J00000000000000000000048"
+        role_id: "01J00000000000000000000003"
+        permission_id: "01J00000000000000000000018"
+      - id: "01J00000000000000000000049"
+        role_id: "01J00000000000000000000003"
+        permission_id: "01J00000000000000000000019"
+      - id: "01J0000000000000000000004A"
+        role_id: "01J00000000000000000000003"
+        permission_id: "01J0000000000000000000001A"
+      - id: "01J0000000000000000000004B"
+        role_id: "01J00000000000000000000003"
+        permission_id: "01J0000000000000000000001B"
+      - id: "01J0000000000000000000004C"
+        role_id: "01J00000000000000000000003"
+        permission_id: "01J0000000000000000000001C"
+      - id: "01J0000000000000000000004D"
+        role_id: "01J00000000000000000000003"
+        permission_id: "01J0000000000000000000001D"
+      - id: "01J0000000000000000000004E"
+        role_id: "01J00000000000000000000003"
+        permission_id: "01J0000000000000000000001E"
+      - id: "01J0000000000000000000004F"
+        role_id: "01J00000000000000000000003"
+        permission_id: "01J0000000000000000000001F"
+      - id: "01J00000000000000000000050"
+        role_id: "01J00000000000000000000003"
+        permission_id: "01J00000000000000000000020"
+      - id: "01J00000000000000000000051"
+        role_id: "01J00000000000000000000003"
+        permission_id: "01J00000000000000000000021"
+      - id: "01J00000000000000000000052"
+        role_id: "01J00000000000000000000003"
+        permission_id: "01J00000000000000000000022"
+      - id: "01J00000000000000000000053"
+        role_id: "01J00000000000000000000003"
+        permission_id: "01J00000000000000000000023"
+      - id: "01J00000000000000000000054"
+        role_id: "01J00000000000000000000003"
+        permission_id: "01J00000000000000000000024"
+      - id: "01J00000000000000000000055"
+        role_id: "01J00000000000000000000003"
+        permission_id: "01J00000000000000000000025"
+      - id: "01J00000000000000000000056"
+        role_id: "01J00000000000000000000003"
+        permission_id: "01J00000000000000000000026"
+      - id: "01J00000000000000000000057"
+        role_id: "01J00000000000000000000003"
+        permission_id: "01J00000000000000000000027"
+      - id: "01J00000000000000000000058"
+        role_id: "01J00000000000000000000003"
+        permission_id: "01J00000000000000000000028"
+      - id: "01J00000000000000000000059"
+        role_id: "01J00000000000000000000003"
+        permission_id: "01J00000000000000000000029"
+      - id: "01J0000000000000000000005A"
+        role_id: "01J00000000000000000000003"
+        permission_id: "01J0000000000000000000002A"
+      - id: "01J0000000000000000000005B"
+        role_id: "01J00000000000000000000003"
+        permission_id: "01J0000000000000000000002B"
+      - id: "01J0000000000000000000005C"
+        role_id: "01J00000000000000000000003"
+        permission_id: "01J0000000000000000000002C"
+      - id: "01J0000000000000000000005D"
+        role_id: "01J00000000000000000000003"
+        permission_id: "01J0000000000000000000002D"
+      - id: "01J0000000000000000000005E"
+        role_id: "01J00000000000000000000003"
+        permission_id: "01J0000000000000000000002E"
+      - id: "01J0000000000000000000005F"
+        role_id: "01J00000000000000000000003"
+        permission_id: "01J0000000000000000000002F"
+      - id: "01J00000000000000000000060"
+        role_id: "01J00000000000000000000003"
+        permission_id: "01J00000000000000000000030"
+      - id: "01J00000000000000000000061"
+        role_id: "01J00000000000000000000003"
+        permission_id: "01J00000000000000000000031"
+      - id: "01J00000000000000000000062"
+        role_id: "01J00000000000000000000003"
+        permission_id: "01J00000000000000000000032"
+      - id: "01J00000000000000000000063"
+        role_id: "01J00000000000000000000003"
+        permission_id: "01J00000000000000000000033"
+      - id: "01J00000000000000000000064"
+        role_id: "01J00000000000000000000003"
+        permission_id: "01J00000000000000000000034"
+      - id: "01J00000000000000000000065"
+        role_id: "01J00000000000000000000003"
+        permission_id: "01J00000000000000000000035"
+      - id: "01J00000000000000000000066"
+        role_id: "01J00000000000000000000003"
+        permission_id: "01J00000000000000000000036"
+      - id: "01J00000000000000000000067"
+        role_id: "01J00000000000000000000003"
+        permission_id: "01J00000000000000000000037"
+      - id: "01J00000000000000000000068"
+        role_id: "01J00000000000000000000003"
+        permission_id: "01J00000000000000000000038"
+      - id: "01J00000000000000000000069"
+        role_id: "01J00000000000000000000003"
+        permission_id: "01J00000000000000000000039"
+      - id: "01J0000000000000000000006A"
+        role_id: "01J00000000000000000000003"
+        permission_id: "01J0000000000000000000003A"
+      - id: "01J0000000000000000000006B"
+        role_id: "01J00000000000000000000003"
+        permission_id: "01J0000000000000000000003B"
+      - id: "01J0000000000000000000006C"
+        role_id: "01J00000000000000000000003"
+        permission_id: "01J0000000000000000000003C"
+      - id: "01J0000000000000000000006D"
+        role_id: "01J00000000000000000000003"
+        permission_id: "01J0000000000000000000003D"
+      - id: "01J0000000000000000000006E"
+        role_id: "01J00000000000000000000003"
+        permission_id: "01J0000000000000000000003E"
+      - id: "01J0000000000000000000006F"
+        role_id: "01J00000000000000000000003"
+        permission_id: "01J0000000000000000000003F"
+      - id: "01J00000000000000000000070"
+        role_id: "01J00000000000000000000003"
+        permission_id: "01J00000000000000000000040"
+
+  - entity_name: "FeatureFlag"
+    description: "Feature flags untuk manajemen tier subscription."
+    records:
+      - id: "01J00000000000000000000071"
+        flag_code: "white_label"
+        flag_name: "White-Label Branding"
+        description: "Kustomisasi logo, warna, dan domain sendiri untuk customer-facing pages."
+      - id: "01J00000000000000000000072"
+        flag_code: "custom_domain"
+        flag_name: "Custom Domain"
+        description: "Menggunakan domain sendiri (e.g., booking.agensi-abc.com)."
+      - id: "01J00000000000000000000073"
+        flag_code: "api_access"
+        flag_name: "API Access"
+        description: "Akses REST API untuk integrasi sistem eksternal."
+      - id: "01J00000000000000000000074"
+        flag_code: "multi_branch"
+        flag_name: "Multi-Branch Management"
+        description: "Mengelola beberapa cabang/branch dalam satu tenant."
+      - id: "01J00000000000000000000075"
+        flag_code: "advanced_reporting"
+        flag_name: "Advanced Reporting"
+        description: "Custom report builder, scheduled report via email."
+      - id: "01J00000000000000000000076"
+        flag_code: "vendor_management"
+        flag_name: "Vendor Management"
+        description: "Onboarding & manajemen vendor pihak ketiga."
+      - id: "01J00000000000000000000077"
+        flag_code: "tour_package"
+        flag_name: "Tour Package Builder"
+        description: "Membuat dan menjual paket wisata dengan itinerary."
+      - id: "01J00000000000000000000078"
+        flag_code: "rental_management"
+        flag_name: "Vehicle Rental"
+        description: "Menyewakan kendaraan (dengan/tanpa driver)."
+      - id: "01J00000000000000000000079"
+        flag_code: "hotel_management"
+        flag_name: "Hotel Management"
+        description: "Mendaftarkan dan menjual kamar hotel."
+      - id: "01J0000000000000000000007A"
+        flag_code: "airport_transfer"
+        flag_name: "Airport Transfer"
+        description: "Layanan transfer bandara."
+      - id: "01J0000000000000000000007B"
+        flag_code: "promo_engine"
+        flag_name: "Promotions & Voucher"
+        description: "Membuat dan mengelola kode promo/voucher."
+
+  - entity_name: "TierFeatureFlag"
+    description: "Mapping feature flags ke subscription tier."
+    records:
+      # Starter Tier
+      - id: "01J0000000000000000000007C"
+        tier: "starter"
+        feature_flag_id: "01J00000000000000000000071"
+      - id: "01J0000000000000000000007D"
+        tier: "starter"
+        feature_flag_id: "01J0000000000000000000007B"
+      # Growth Tier (Starter + additional)
+      - id: "01J0000000000000000000007E"
+        tier: "growth"
+        feature_flag_id: "01J00000000000000000000071"
+      - id: "01J0000000000000000000007F"
+        tier: "growth"
+        feature_flag_id: "01J00000000000000000000072"
+      - id: "01J00000000000000000000080"
+        tier: "growth"
+        feature_flag_id: "01J00000000000000000000073"
+      - id: "01J00000000000000000000081"
+        tier: "growth"
+        feature_flag_id: "01J00000000000000000000075"
+      - id: "01J00000000000000000000082"
+        tier: "growth"
+        feature_flag_id: "01J00000000000000000000076"
+      - id: "01J00000000000000000000083"
+        tier: "growth"
+        feature_flag_id: "01J00000000000000000000077"
+      - id: "01J00000000000000000000084"
+        tier: "growth"
+        feature_flag_id: "01J00000000000000000000078"
+      - id: "01J00000000000000000000085"
+        tier: "growth"
+        feature_flag_id: "01J00000000000000000000079"
+      - id: "01J00000000000000000000086"
+        tier: "growth"
+        feature_flag_id: "01J0000000000000000000007A"
+      - id: "01J00000000000000000000087"
+        tier: "growth"
+        feature_flag_id: "01J0000000000000000000007B"
+      # Enterprise Tier (all features)
+      - id: "01J00000000000000000000088"
+        tier: "enterprise"
+        feature_flag_id: "01J00000000000000000000071"
+      - id: "01J00000000000000000000089"
+        tier: "enterprise"
+        feature_flag_id: "01J00000000000000000000072"
+      - id: "01J0000000000000000000008A"
+        tier: "enterprise"
+        feature_flag_id: "01J00000000000000000000073"
+      - id: "01J0000000000000000000008B"
+        tier: "enterprise"
+        feature_flag_id: "01J00000000000000000000074"
+      - id: "01J0000000000000000000008C"
+        tier: "enterprise"
+        feature_flag_id: "01J00000000000000000000075"
+      - id: "01J0000000000000000000008D"
+        tier: "enterprise"
+        feature_flag_id: "01J00000000000000000000076"
+      - id: "01J0000000000000000000008E"
+        tier: "enterprise"
+        feature_flag_id: "01J00000000000000000000077"
+      - id: "01J0000000000000000000008F"
+        tier: "enterprise"
+        feature_flag_id: "01J00000000000000000000078"
+      - id: "01J00000000000000000000090"
+        tier: "enterprise"
+        feature_flag_id: "01J00000000000000000000079"
+      - id: "01J00000000000000000000091"
+        tier: "enterprise"
+        feature_flag_id: "01J0000000000000000000007A"
+      - id: "01J00000000000000000000092"
+        tier: "enterprise"
+        feature_flag_id: "01J0000000000000000000007B"
+
+  - entity_name: "SalesChannel"
+    description: "Default sales channel untuk setiap tenant baru."
+    records:
+      - id: "01J00000000000000000000093"
+        tenant_id: "01J00000000000000000000001"
+        channel_code: "direct_web"
+        channel_name: "Website Langsung"
+        is_active: true
+      - id: "01J00000000000000000000094"
+        tenant_id: "01J00000000000000000000001"
+        channel_code: "agent_counter"
+        channel_name: "Agen / Counter"
+        is_active: true
+
+  - entity_name: "NotificationTemplate"
+    description: "Default system notification templates (akan di-copy ke tenant baru)."
+    records:
+      - id: "01J00000000000000000000095"
+        tenant_id: "01J00000000000000000000001"
+        template_code: "booking_confirmation"
+        channel: "email"
+        subject: "Konfirmasi Pemesanan - {{booking_code}}"
+        body_template: "<h1>Pemesanan Berhasil!</h1><p>Kode Booking: {{booking_code}}</p><p>Total: {{total_amount}}</p><p>Status: {{booking_status}}</p>"
+        is_custom: false
+      - id: "01J00000000000000000000096"
+        tenant_id: "01J00000000000000000000001"
+        template_code: "dp_reminder"
+        channel: "email"
+        subject: "Pengingat Pelunasan - {{booking_code}}"
+        body_template: "<p>Jangan lupa melunasi pemesanan {{booking_code}} sebelum {{settlement_deadline}}.</p><p>Sisa pembayaran: {{remaining_amount}}</p>"
+        is_custom: false
+      - id: "01J00000000000000000000097"
+        tenant_id: "01J00000000000000000000001"
+        template_code: "eticket"
+        channel: "whatsapp"
+        subject: null
+        body_template: "E-Ticket {{booking_code}}\n\nPenumpang: {{passenger_name}}\nKursi: {{seat_code}}\nKeberangkatan: {{departure_at}}\n\nQR Code: {{qr_code_url}}"
+        is_custom: false
+      - id: "01J00000000000000000000098"
+        tenant_id: "01J00000000000000000000001"
+        template_code: "booking_cancelled"
+        channel: "email"
+        subject: "Pembatalan Pemesanan - {{booking_code}}"
+        body_template: "<p>Pemesanan {{booking_code}} telah dibatalkan.</p><p>Alasan: {{cancellation_reason}}</p>"
+        is_custom: false

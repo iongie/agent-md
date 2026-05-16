@@ -1,0 +1,667 @@
+project_name: "PassKey Identity Provider Platform"
+domain: "Passwordless Authentication & Identity Management SaaS"
+date: "2026-05-13"
+
+executive_summary: >
+  PassKey Identity Provider Platform adalah solusi SaaS B2B/B2B2C yang menyediakan
+  infrastruktur autentikasi tanpa kata sandi berbasis standar FIDO2/WebAuthn.
+  Platform ini memungkinkan perusahaan dari semua skala — mulai dari startup hingga
+  enterprise — untuk mengintegrasikan Passkey (Touch ID, Face ID, Hardware Key) ke
+  dalam aplikasi mereka melalui satu SDK dan API yang terpusat. Pengguna akhir
+  mendapat pengalaman login yang jauh lebih aman, cepat, dan mudah dibandingkan
+  kombinasi password + 2FA tradisional, sementara tim IT mendapat kontrol penuh
+  atas kebijakan keamanan identitas organisasi mereka.
+
+business_model:
+  type: "B2B2C SaaS (Platform)"
+  monetization:
+    - "Tiered subscription berdasarkan jumlah Monthly Active Users (MAU)"
+    - "Pay-per-use API call untuk tenant skala enterprise"
+    - "Flat fee bulanan untuk paket Developer (hingga 1.000 MAU gratis)"
+    - "Revenue share dari partner program (integrator / reseller)"
+    - "Enterprise custom contract dengan SLA guarantee dan dedicated support"
+    - "Biaya onboarding & professional services untuk implementasi skala besar"
+
+# ============================================================
+# RBAC PERSONAS
+# ============================================================
+rbac_personas:
+  saas_level:
+    - role: "Super Admin"
+      responsibilities: >
+        Akses penuh ke seluruh sistem platform. Mengelola semua tenant,
+        konfigurasi infrastruktur global, feature flags, dan kebijakan keamanan
+        platform. Dapat melakukan impersonasi tenant untuk keperluan support.
+
+    - role: "Platform Support Engineer"
+      responsibilities: >
+        Menangani tiket support tenant, melihat log audit terbatas, melakukan
+        debugging koneksi passkey, dan eskalasi isu ke tim engineering.
+
+    - role: "Billing & Revenue Admin"
+      responsibilities: >
+        Mengelola paket subscription, invoice, promo kode, refund, dan laporan
+        pendapatan platform. Integrasi dengan payment gateway level platform.
+
+    - role: "Security & Compliance Officer"
+      responsibilities: >
+        Memantau ancaman keamanan lintas tenant, mengelola kebijakan FIDO2
+        global, sertifikasi kepatuhan (SOC 2, ISO 27001), dan laporan audit
+        keamanan untuk regulator.
+
+    - role: "Platform Developer / Engineer"
+      responsibilities: >
+        Mengelola versi SDK, dokumentasi API, changelogs, dan deployment
+        infrastruktur platform. Akses ke CI/CD pipeline dan environment staging.
+
+  tenant_level:
+    - role: "Tenant Owner"
+      responsibilities: >
+        Pemilik akun organisasi. Mengelola billing, mengundang anggota tim,
+        mengkonfigurasi domain aplikasi, menentukan kebijakan autentikasi, dan
+        mengakses semua fitur platform sesuai paket.
+
+    - role: "Security Administrator"
+      responsibilities: >
+        Mengelola kebijakan passkey organisasi (e.g., memaksa enrollment,
+        mencabut perangkat, mengatur session policy, mengkonfigurasi RBAC
+        internal), dan memonitor log keamanan tenant.
+
+    - role: "Developer / Integration Engineer"
+      responsibilities: >
+        Mengelola API keys, webhook, konfigurasi OAuth/OIDC, integrasi SDK ke
+        aplikasi klien, dan testing di environment sandbox.
+
+    - role: "IT Manager / Identity Admin"
+      responsibilities: >
+        Mengelola direktori pengguna end-user, memproses permintaan recovery
+        akun, onboarding karyawan baru, dan melihat laporan aktivitas autentikasi.
+
+    - role: "Auditor / Viewer"
+      responsibilities: >
+        Read-only access ke log audit, laporan kepatuhan, dan metrik penggunaan
+        autentikasi untuk keperluan internal audit atau compliance review.
+
+  end_user_level:
+    - role: "Registered User (Passkey Owner)"
+      responsibilities: >
+        Pengguna akhir aplikasi tenant yang telah melakukan enrollment passkey.
+        Dapat login, mendaftarkan perangkat baru, mencabut perangkat lama,
+        dan mengelola preferensi autentikasi mereka.
+
+    - role: "Guest / Unregistered User"
+      responsibilities: >
+        Pengguna yang belum memiliki akun atau passkey. Melalui alur onboarding
+        untuk mendaftar dan melakukan enrollment passkey pertama kali.
+
+    - role: "Recovery User"
+      responsibilities: >
+        Pengguna yang kehilangan akses ke semua perangkat terdaftar. Melalui
+        alur verifikasi identitas alternatif (e-mail OTP, magic link, atau
+        verifikasi manual oleh admin) untuk mendapatkan kembali akses.
+
+    - role: "Enterprise Employee (SSO User)"
+      responsibilities: >
+        Karyawan perusahaan yang login via Passkey + Enterprise SSO (SAML/OIDC).
+        Perangkat mereka dikelola oleh IT Admin melalui device policy organisasi.
+
+# ============================================================
+# MODULES
+# ============================================================
+modules:
+
+  # ----------------------------------------------------------
+  - module_name: "Core Passkey Authentication Engine"
+    description: >
+      Inti platform. Mengelola seluruh lifecycle passkey berbasis standar
+      FIDO2/WebAuthn — mulai dari registrasi, autentikasi, hingga revokasi.
+      Mendukung authenticator platform (Touch ID, Face ID, Windows Hello)
+      maupun roaming authenticator (YubiKey, hardware security key).
+    features:
+      - feature: "WebAuthn Credential Registration (Passkey Enrollment)"
+        phase: "Phase 1"
+        value_proposition: >
+          Memungkinkan pengguna mendaftarkan passkey (biometrik atau hardware key)
+          ke akun mereka. Endpoint standar FIDO2 yang kompatibel dengan semua
+          browser modern dan OS (iOS, Android, Windows, macOS).
+
+      - feature: "WebAuthn Authentication (Passwordless Login)"
+        phase: "Phase 1"
+        value_proposition: >
+          Alur login tanpa kata sandi menggunakan passkey yang telah didaftarkan.
+          Verifikasi kriptografis challenge-response sehingga tidak ada secret
+          yang dikirimkan melalui jaringan — imun terhadap phishing.
+
+      - feature: "Cross-Device Authentication (Hybrid Transport / QR Code Flow)"
+        phase: "Phase 1"
+        value_proposition: >
+          Pengguna dapat login di desktop menggunakan passkey dari smartphone
+          via QR code scan (standar CTAP2 Hybrid). Sangat berguna saat perangkat
+          tidak memiliki sensor biometrik.
+
+      - feature: "Multi-Device Passkey (Synced Passkeys via Cloud)"
+        phase: "Phase 1"
+        value_proposition: >
+          Dukungan penuh untuk synced passkeys yang tersimpan di iCloud Keychain,
+          Google Password Manager, atau Samsung Pass. Pengguna tidak perlu
+          re-enroll saat berganti perangkat.
+
+      - feature: "Hardware Security Key Support (FIDO2 Roaming Authenticator)"
+        phase: "Phase 1"
+        value_proposition: >
+          Dukungan YubiKey, Titan Key, dan semua FIDO2-certified hardware token
+          untuk use case enterprise high-security yang membutuhkan physical key.
+
+      - feature: "Passkey Discovery & Auto-Fill Integration"
+        phase: "Phase 1"
+        value_proposition: >
+          Integrasi dengan browser autofill API untuk menawarkan login passkey
+          secara otomatis (Conditional UI) tanpa perlu klik tombol login.
+
+      - feature: "Attestation Verification & Device Trust Level"
+        phase: "Phase 2"
+        value_proposition: >
+          Verifikasi attestation statement dari authenticator untuk memastikan
+          perangkat yang digunakan adalah genuine hardware (bukan emulator).
+          Tenant dapat menetapkan minimum trust level per aplikasi.
+
+      - feature: "Passkey Binding to Specific Applications (RP ID Management)"
+        phase: "Phase 1"
+        value_proposition: >
+          Setiap aplikasi tenant terikat ke domain (Relying Party ID) spesifik,
+          sehingga passkey tidak bisa digunakan lintas aplikasi yang tidak
+          diotorisasi — mencegah credential stuffing.
+
+  # ----------------------------------------------------------
+  - module_name: "Identity & Access Management (IAM)"
+    description: >
+      Modul untuk mengelola identitas pengguna, sesi aktif, OAuth 2.0 /
+      OpenID Connect (OIDC) flows, dan integrasi SSO enterprise.
+    features:
+      - feature: "OAuth 2.0 Authorization Server dengan PKCE"
+        phase: "Phase 1"
+        value_proposition: >
+          Platform bertindak sebagai Authorization Server standar OAuth 2.0.
+          Mendukung Authorization Code Flow + PKCE untuk SPA dan mobile app,
+          serta Client Credentials untuk machine-to-machine (M2M).
+
+      - feature: "OpenID Connect (OIDC) Provider"
+        phase: "Phase 1"
+        value_proposition: >
+          Menerbitkan ID Token (JWT) setelah autentikasi passkey berhasil.
+          Kompatibel dengan semua library OIDC client (next-auth, passport.js,
+          Spring Security, dll).
+
+      - feature: "SAML 2.0 SP & IdP"
+        phase: "Phase 2"
+        value_proposition: >
+          Mendukung SAML 2.0 untuk integrasi dengan enterprise SSO legacy
+          (Okta, Azure AD, ADFS). Platform dapat bertindak sebagai IdP atau SP.
+
+      - feature: "Social Login Federation (Google, Apple, Microsoft)"
+        phase: "Phase 1"
+        value_proposition: >
+          Menggabungkan passkey dengan social login sebagai fallback atau
+          opsi onboarding. Setelah login sosial pertama kali, pengguna
+          didorong untuk mendaftarkan passkey.
+
+      - feature: "Session Management & Token Lifecycle"
+        phase: "Phase 1"
+        value_proposition: >
+          Pengelolaan sesi aktif per perangkat, refresh token rotation,
+          absolute session timeout, dan kemampuan remote logout dari semua
+          sesi aktif.
+
+      - feature: "Just-in-Time (JIT) User Provisioning"
+        phase: "Phase 2"
+        value_proposition: >
+          Otomatis membuat akun pengguna saat login pertama kali via SSO
+          enterprise tanpa perlu provisioning manual oleh IT Admin.
+
+      - feature: "SCIM 2.0 User Provisioning & Deprovisioning"
+        phase: "Phase 2"
+        value_proposition: >
+          Sinkronisasi otomatis direktori pengguna dari IdP enterprise (Azure AD,
+          Okta) menggunakan standar SCIM 2.0. Deprovisioning otomatis saat
+          karyawan resign.
+
+      - feature: "Step-Up Authentication (Kontekstual Re-autentikasi)"
+        phase: "Phase 2"
+        value_proposition: >
+          Meminta verifikasi passkey ulang untuk aksi sensitif (transfer dana,
+          ubah email) meskipun sesi masih aktif — tanpa mengganggu UX normal.
+
+  # ----------------------------------------------------------
+  - module_name: "Device & Credential Management"
+    description: >
+      Manajemen penuh atas perangkat dan passkey yang terdaftar oleh
+      pengguna, termasuk revokasi, audit perangkat, dan kebijakan enrollment.
+    features:
+      - feature: "Multi-Device Enrollment per User"
+        phase: "Phase 1"
+        value_proposition: >
+          Pengguna dapat mendaftarkan banyak perangkat (laptop, smartphone,
+          tablet) sebagai passkey. Setiap perangkat ditampilkan dengan nama
+          dan waktu pendaftaran untuk kemudahan manajemen.
+
+      - feature: "Self-Service Device Revocation"
+        phase: "Phase 1"
+        value_proposition: >
+          Pengguna dapat mencabut passkey perangkat yang hilang atau dicuri
+          secara mandiri dari halaman profil mereka, langsung memutus akses.
+
+      - feature: "Admin-Initiated Forced Revocation"
+        phase: "Phase 1"
+        value_proposition: >
+          IT Admin atau Security Admin dapat mencabut semua passkey pengguna
+          secara paksa (e.g., saat karyawan resign atau akun dikompromikan).
+
+      - feature: "Device Trust & Risk Scoring"
+        phase: "Phase 2"
+        value_proposition: >
+          Setiap perangkat mendapat trust score berdasarkan histori penggunaan,
+          lokasi, OS version, dan attestation data. Login dari perangkat berisiko
+          tinggi dapat memicu step-up auth atau blokir otomatis.
+
+      - feature: "Enforced Enrollment Policy"
+        phase: "Phase 2"
+        value_proposition: >
+          Tenant dapat mewajibkan seluruh pengguna untuk mendaftarkan passkey
+          dalam X hari setelah akun dibuat. Notifikasi pengingat otomatis
+          dikirim hingga enrollment selesai.
+
+      - feature: "Passkey Export & Backup Hints (Recovery Codes)"
+        phase: "Phase 2"
+        value_proposition: >
+          Menghasilkan backup recovery codes terenkripsi yang dapat digunakan
+          sebagai last-resort akses jika semua perangkat hilang. Tenant dapat
+          mengaktifkan/menonaktifkan fitur ini sesuai kebijakan keamanan.
+
+  # ----------------------------------------------------------
+  - module_name: "Developer Portal & API Gateway"
+    description: >
+      Portal terpusat bagi developer tenant untuk mengintegrasikan platform,
+      mengelola API keys, mengakses SDK, dan bereksperimen di sandbox environment.
+    features:
+      - feature: "Self-Service API Key Management"
+        phase: "Phase 1"
+        value_proposition: >
+          Developer dapat membuat, merotasi, dan mencabut API keys dengan scope
+          terbatas (read-only, write, admin) melalui UI tanpa perlu kontak support.
+
+      - feature: "Sandbox / Test Environment"
+        phase: "Phase 1"
+        value_proposition: >
+          Environment terpisah yang sepenuhnya terisolasi dari produksi untuk
+          testing integrasi passkey tanpa mempengaruhi data pengguna nyata.
+          Dilengkapi dengan virtual authenticator simulator.
+
+      - feature: "SDK Multi-Platform (Web, iOS, Android, React Native, Flutter)"
+        phase: "Phase 1"
+        value_proposition: >
+          SDK siap pakai untuk semua platform utama, menyederhanakan kompleksitas
+          WebAuthn menjadi beberapa baris kode. Dokumentasi lengkap dan contoh
+          kode tersedia di portal.
+
+      - feature: "Interactive API Documentation (OpenAPI / Swagger UI)"
+        phase: "Phase 1"
+        value_proposition: >
+          Dokumentasi API yang dapat langsung dicoba dari browser, dilengkapi
+          dengan contoh request/response nyata untuk mempercepat integrasi.
+
+      - feature: "Webhook Management"
+        phase: "Phase 1"
+        value_proposition: >
+          Developer dapat mengkonfigurasi webhook untuk event-event penting
+          (passkey.registered, passkey.revoked, auth.success, auth.failed,
+          user.locked). Dilengkapi retry logic dan delivery log.
+
+      - feature: "Pre-built UI Components (Drop-in Login Widget)"
+        phase: "Phase 1"
+        value_proposition: >
+          Komponen UI siap pakai (modal, button, form) yang dapat di-embed ke
+          aplikasi dengan satu baris script. Dapat dikustomisasi warna & logo
+          agar sesuai branding tenant.
+
+      - feature: "CLI Tool untuk Developer"
+        phase: "Phase 2"
+        value_proposition: >
+          Command-line interface untuk mengelola konfigurasi tenant, menguji
+          endpoint, men-generate boilerplate integrasi, dan deploy konfigurasi
+          sebagai code (Infrastructure as Code).
+
+      - feature: "Integration Marketplace (Pre-built Connectors)"
+        phase: "Phase 2"
+        value_proposition: >
+          Koneksi siap pakai ke platform populer: WordPress, Shopify, Bubble,
+          Laravel Fortify, Next.js Auth, Spring Security — mengurangi waktu
+          integrasi dari hari menjadi menit.
+
+  # ----------------------------------------------------------
+  - module_name: "Tenant & Organization Management"
+    description: >
+      Modul untuk mengelola siklus hidup tenant — dari onboarding, konfigurasi
+      aplikasi, manajemen anggota tim, hingga offboarding.
+    features:
+      - feature: "Self-Service Tenant Onboarding"
+        phase: "Phase 1"
+        value_proposition: >
+          Proses pendaftaran tenant yang cepat: daftar, verifikasi domain,
+          buat aplikasi pertama, dan dapatkan API key — selesai dalam kurang
+          dari 5 menit tanpa perlu intervensi tim sales.
+
+      - feature: "Multi-Application per Tenant"
+        phase: "Phase 1"
+        value_proposition: >
+          Satu tenant dapat mengelola banyak aplikasi (mobile app, web app,
+          API backend) dengan konfigurasi passkey dan OAuth yang berbeda-beda
+          dari satu dashboard terpusat.
+
+      - feature: "Team Member Management & Role Assignment"
+        phase: "Phase 1"
+        value_proposition: >
+          Tenant Owner dapat mengundang anggota tim via email, menetapkan role,
+          dan mencabut akses tanpa perlu kontak support platform.
+
+      - feature: "Custom Domain & Branding (White-label)"
+        phase: "Phase 2"
+        value_proposition: >
+          Tenant dapat menggunakan domain mereka sendiri (auth.namaklien.com)
+          untuk semua halaman autentikasi, dengan logo, warna, dan font yang
+          sepenuhnya dikustomisasi — memberikan pengalaman seamless bagi
+          pengguna akhir mereka.
+
+      - feature: "Organization Hierarchy (Parent-Child Tenant)"
+        phase: "Phase 2"
+        value_proposition: >
+          Mendukung struktur holding company — satu parent tenant yang mengelola
+          banyak subsidiary tenant dengan billing terpusat dan kebijakan keamanan
+          yang dapat di-cascade atau di-override.
+
+  # ----------------------------------------------------------
+  - module_name: "Security, Policy & Compliance"
+    description: >
+      Modul untuk mengkonfigurasi kebijakan keamanan autentikasi, mendeteksi
+      anomali, dan memastikan kepatuhan terhadap regulasi internasional.
+    features:
+      - feature: "Adaptive Authentication Policy Engine"
+        phase: "Phase 2"
+        value_proposition: >
+          Aturan berbasis kondisi: jika login dari negara baru ATAU jam tidak biasa
+          ATAU IP berisiko tinggi → wajib step-up passkey. Mengurangi friction
+          untuk pengguna normal sekaligus memblokir akses mencurigakan.
+
+      - feature: "Brute Force & Anomaly Detection"
+        phase: "Phase 1"
+        value_proposition: >
+          Deteksi otomatis percobaan login berulang yang gagal, credential
+          stuffing, dan pola anomali. Rate limiting dan temporary account lock
+          diterapkan secara otomatis.
+
+      - feature: "IP Allowlist & Blocklist Management"
+        phase: "Phase 1"
+        value_proposition: >
+          Tenant dapat membatasi akses ke aplikasi mereka hanya dari range IP
+          tertentu (e.g., kantor, VPN perusahaan) atau memblokir IP/country
+          tertentu.
+
+      - feature: "Audit Log Lengkap & Immutable"
+        phase: "Phase 1"
+        value_proposition: >
+          Setiap event autentikasi (sukses, gagal, revokasi, perubahan kebijakan)
+          dicatat dengan timestamp, IP, user agent, dan geolocation. Log bersifat
+          immutable dan dapat diexport untuk compliance.
+
+      - feature: "SOC 2 Type II & ISO 27001 Compliance Reporting"
+        phase: "Phase 2"
+        value_proposition: >
+          Generate laporan kepatuhan siap audit secara otomatis untuk membantu
+          tenant memenuhi persyaratan SOC 2, ISO 27001, GDPR, dan regulasi lokal.
+
+      - feature: "GDPR & Data Residency Control"
+        phase: "Phase 2"
+        value_proposition: >
+          Tenant dapat memilih region penyimpanan data (EU, US, SEA) untuk
+          memenuhi regulasi data residency lokal. Data passkey dan PII pengguna
+          tidak pernah meninggalkan region yang dipilih.
+
+      - feature: "Suspicious Activity Alerting"
+        phase: "Phase 1"
+        value_proposition: >
+          Notifikasi real-time ke Security Admin jika terdeteksi aktivitas
+          mencurigakan (login dari lokasi baru, banyak perangkat didaftarkan
+          sekaligus, atau pola revokasi massal).
+
+  # ----------------------------------------------------------
+  - module_name: "Account Recovery & Fallback Authentication"
+    description: >
+      Alur terstruktur untuk membantu pengguna mendapatkan kembali akses saat
+      semua passkey hilang, tanpa mengorbankan keamanan.
+    features:
+      - feature: "Magic Link Email Recovery"
+        phase: "Phase 1"
+        value_proposition: >
+          Kirim link one-time-use ke email terdaftar pengguna sebagai fallback
+          recovery. Setelah berhasil, pengguna langsung diarahkan untuk
+          mendaftarkan passkey baru.
+
+      - feature: "Admin-Assisted Recovery Workflow"
+        phase: "Phase 1"
+        value_proposition: >
+          Alur terstruktur di mana IT Admin dapat memverifikasi identitas
+          pengguna dan menerbitkan sesi recovery sementara. Semua langkah
+          tercatat di audit log untuk akuntabilitas.
+
+      - feature: "Recovery Code (Backup Codes)"
+        phase: "Phase 2"
+        value_proposition: >
+          Pengguna dapat menyimpan kode recovery satu kali pakai yang
+          dienkripsi saat enrollment awal. Dapat dinonaktifkan oleh tenant
+          dengan kebijakan keamanan tinggi.
+
+      - feature: "Identity Verification via Video KYC Integration"
+        phase: "Phase 2"
+        value_proposition: >
+          Untuk use case high-value (perbankan, fintech), integrasikan dengan
+          provider KYC (Veriff, Onfido) sebagai metode recovery dengan
+          verifikasi identitas berbasis video/dokumen.
+
+  # ----------------------------------------------------------
+  - module_name: "Analytics, Monitoring & Reporting"
+    description: >
+      Dashboard dan laporan untuk memahami pola penggunaan autentikasi,
+      mengidentifikasi bottleneck UX, dan membuktikan ROI keamanan.
+    features:
+      - feature: "Real-time Authentication Dashboard"
+        phase: "Phase 1"
+        value_proposition: >
+          Visualisasi live: total login hari ini, success rate, failure rate,
+          breakdown per metode (passkey, magic link, recovery), dan grafik
+          tren harian/mingguan.
+
+      - feature: "Passkey Adoption Rate Tracking"
+        phase: "Phase 1"
+        value_proposition: >
+          Persentase pengguna aktif yang sudah enroll passkey vs belum.
+          Breakdown per platform (iOS, Android, Desktop). Membantu tenant
+          mengukur progress migrasi dari password ke passkey.
+
+      - feature: "Security Incident Report"
+        phase: "Phase 1"
+        value_proposition: >
+          Laporan agregat tentang failed login attempts, locked accounts,
+          anomaly events — memungkinkan Security Admin mengidentifikasi
+          tren ancaman sebelum menjadi insiden besar.
+
+      - feature: "Custom Report Builder & Scheduled Export"
+        phase: "Phase 2"
+        value_proposition: >
+          Tenant dapat membangun laporan kustom dengan filter dimensi bebas
+          (periode, aplikasi, user segment, event type) dan menjadwalkan
+          pengiriman otomatis via email dalam format CSV atau PDF.
+
+      - feature: "MAU & API Usage Tracking (untuk billing)"
+        phase: "Phase 1"
+        value_proposition: >
+          Transparansi penuh tentang konsumsi layanan: jumlah MAU, API calls,
+          webhook deliveries — memudahkan tenant merencanakan upgrade paket
+          sebelum melampaui batas.
+
+      - feature: "Funnel Analysis: Enrollment & Login Journey"
+        phase: "Phase 2"
+        value_proposition: >
+          Visualisasi drop-off di setiap langkah alur enrollment dan login.
+          Membantu tim produk tenant mengidentifikasi titik friction dan
+          mengoptimalkan conversion rate autentikasi.
+
+  # ----------------------------------------------------------
+  - module_name: "Notification & Communication Engine"
+    description: >
+      Sistem notifikasi multi-channel untuk event autentikasi penting,
+      peringatan keamanan, dan komunikasi onboarding kepada pengguna akhir.
+    features:
+      - feature: "Email Notifikasi Event Keamanan"
+        phase: "Phase 1"
+        value_proposition: >
+          Email otomatis kepada pengguna untuk event penting: perangkat baru
+          didaftarkan, login dari lokasi baru, passkey dicabut, atau
+          percobaan login gagal berkali-kali.
+
+      - feature: "Push Notification (via Tenant's Mobile App)"
+        phase: "Phase 2"
+        value_proposition: >
+          Webhook payload yang dikirim ke aplikasi mobile tenant untuk
+          menampilkan notifikasi push native saat ada aktivitas mencurigakan
+          pada akun pengguna.
+
+      - feature: "Kustomisasi Template Notifikasi per Tenant"
+        phase: "Phase 1"
+        value_proposition: >
+          Tenant dapat mengkustomisasi subjek, isi, dan branding email
+          notifikasi sesuai identitas merek mereka. Mendukung variabel dinamis
+          (nama pengguna, nama perangkat, waktu event).
+
+      - feature: "Enrollment Reminder Campaign"
+        phase: "Phase 2"
+        value_proposition: >
+          Seri email otomatis yang mengingatkan pengguna yang belum enroll
+          passkey: reminder 3 hari, 7 hari, dan 14 hari setelah registrasi.
+          Tenant dapat mengatur jadwal dan konten kampanye.
+
+  # ----------------------------------------------------------
+  - module_name: "Subscription, Billing & Tenant Lifecycle"
+    description: >
+      Pengelolaan siklus hidup komersial tenant: dari trial, langganan aktif,
+      upgrade/downgrade, invoice, hingga offboarding.
+    features:
+      - feature: "Freemium / Free Trial Plan"
+        phase: "Phase 1"
+        value_proposition: >
+          Paket gratis hingga 1.000 MAU untuk menarik developer dan startup
+          mencoba platform tanpa friction finansial. Upgrade mudah saat
+          kebutuhan bertumbuh.
+
+      - feature: "Self-Service Plan Upgrade & Downgrade"
+        phase: "Phase 1"
+        value_proposition: >
+          Tenant dapat mengubah paket secara mandiri dari dashboard dengan
+          proration otomatis. Tidak perlu menghubungi sales untuk tier standar.
+
+      - feature: "Automated Invoice & Receipt Generation"
+        phase: "Phase 1"
+        value_proposition: >
+          Invoice PDF otomatis dikirim setiap siklus billing. Mendukung
+          format invoice lokal (Faktur Pajak untuk Indonesia, GST untuk
+          Australia, VAT untuk EU).
+
+      - feature: "Grace Period & Dunning Management"
+        phase: "Phase 1"
+        value_proposition: >
+          Sistem otomatis mengirim reminder pembayaran, memberikan grace
+          period, dan akhirnya menangguhkan (bukan menghapus) akun tenant
+          yang gagal bayar — mencegah kehilangan data pelanggan.
+
+      - feature: "Enterprise Custom Pricing & Contract Management"
+        phase: "Phase 2"
+        value_proposition: >
+          Modul khusus untuk mengelola kontrak enterprise: custom pricing,
+          committed MAU, SLA terms, dan pembuatan invoice manual untuk
+          pembayaran via bank transfer.
+
+# ============================================================
+# INTEGRATIONS
+# ============================================================
+integrations_needed:
+  - category: "Payment Gateway"
+    examples: "Stripe, Midtrans (Indonesia), Xendit, PayPal"
+    purpose: >
+      Memproses pembayaran subscription tenant. Mendukung kartu kredit,
+      virtual account, dan QRIS untuk pasar Indonesia.
+
+  - category: "Email Delivery Service"
+    examples: "SendGrid, Amazon SES, Mailgun, Postmark"
+    purpose: >
+      Mengirimkan notifikasi keamanan, email recovery, magic link, dan
+      invoice kepada pengguna dan tenant dengan deliverability tinggi.
+
+  - category: "Enterprise Identity Provider (IdP)"
+    examples: "Azure Active Directory, Okta, Google Workspace, OneLogin"
+    purpose: >
+      Integrasi SAML/OIDC/SCIM untuk sinkronisasi identitas karyawan
+      enterprise dan mendukung SSO lintas platform.
+
+  - category: "Hardware Security Key Ecosystem"
+    examples: "YubiKey (Yubico), Google Titan Key, Feitian"
+    purpose: >
+      Kompatibilitas penuh dengan FIDO2-certified hardware authenticator
+      untuk use case enterprise high-assurance.
+
+  - category: "KYC / Identity Verification"
+    examples: "Veriff, Onfido, Persona, Privy (Indonesia)"
+    purpose: >
+      Verifikasi identitas pengguna untuk alur account recovery
+      high-assurance di industri fintech dan perbankan.
+
+  - category: "SMS / WhatsApp Gateway (Fallback Only)"
+    examples: "Twilio, Vonage, WhatsApp Business API, Zenziva (ID)"
+    purpose: >
+      Digunakan HANYA sebagai fallback recovery (bukan 2FA berbasis SMS
+      yang rawan SIM swap). Hanya diaktifkan jika tenant mengizinkannya.
+
+  - category: "SIEM & Security Monitoring"
+    examples: "Splunk, Elastic SIEM, Datadog, Microsoft Sentinel"
+    purpose: >
+      Forward audit log dan security event ke SIEM tenant enterprise
+      untuk pemantauan terpusat dan respons insiden.
+
+  - category: "Observability & Infrastructure"
+    examples: "Datadog, New Relic, Grafana, AWS CloudWatch"
+    purpose: >
+      Monitoring infrastruktur platform (latency, uptime, error rate)
+      dan alerting internal tim engineering.
+
+  - category: "Cloud Infrastructure"
+    examples: "AWS, Google Cloud Platform, Cloudflare Workers"
+    purpose: >
+      Hosting platform dengan multi-region deployment untuk memenuhi
+      persyaratan data residency dan latensi rendah di seluruh dunia.
+
+# ============================================================
+# NON-FUNCTIONAL REQUIREMENTS
+# ============================================================
+non_functional_requirements:
+  - "99.99% uptime SLA untuk paket Enterprise dengan kompensasi kredit jika SLA dilanggar"
+  - "Autentikasi passkey harus selesai dalam < 300ms (p99 latency) untuk UX optimal"
+  - "End-to-end enkripsi untuk semua data passkey; private key tidak pernah meninggalkan perangkat pengguna (zero-knowledge design)"
+  - "Sertifikasi FIDO2 Level 1 & 2 dari FIDO Alliance untuk semua authenticator yang didukung"
+  - "Multi-region deployment dengan data residency control (SEA, EU, US)"
+  - "Audit log immutable untuk semua event autentikasi, tersimpan minimal 2 tahun"
+  - "Zero-downtime deployment menggunakan blue-green atau canary release strategy"
+  - "Rate limiting per tenant dan per IP untuk mencegah abuse API"
+  - "Enkripsi data at-rest (AES-256) dan in-transit (TLS 1.3 minimum)"
+  - "Kepatuhan penuh terhadap GDPR, PDPA (Thailand), UU PDP (Indonesia), dan SOC 2 Type II"
+  - "Disaster Recovery Plan dengan RTO < 1 jam dan RPO < 15 menit"
+  - "Penetration testing rutin (minimal 1x/tahun) oleh pihak ketiga independen"
+  - "Bug bounty program aktif untuk penemuan celah keamanan oleh komunitas"
+  - "Semua SDK bersifat open-source untuk transparansi dan kepercayaan komunitas keamanan"
+  - "Multi-tenancy isolasi penuh: data satu tenant tidak bisa diakses oleh tenant lain dalam kondisi apapun"
