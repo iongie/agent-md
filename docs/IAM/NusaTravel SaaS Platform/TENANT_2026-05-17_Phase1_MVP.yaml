@@ -1,0 +1,1056 @@
+architecture_overview:
+  description: >
+    TenantModule menangani seluruh lifecycle multi-tenancy di NusaTravel SaaS
+    Platform. Mencakup self-service tenant registration dengan KYB (Know Your
+    Business) document upload & verification, white-label branding configuration,
+    subscription tier & feature flag management, trial/grace period management,
+    dan tenant status management (suspend/activate). Modul ini juga menyediakan
+    TenantContextService untuk logical data isolation dan auto-inject tenant_id
+    pada setiap query database.
+
+modules:
+  - module_name: "TenantModule"
+    path: "src/modules/tenant"
+    components:
+      # ─── Controller ───
+      - file_name: "tenant-onboarding.controller.ts"
+        type: "Controller"
+        description: >
+          Public endpoint untuk self-service tenant registration & KYB upload.
+          Admin endpoint untuk Super Admin melakukan verifikasi KYB, manajemen
+          subscription tier, suspend/activate tenant, dan melihat daftar tenant.
+        code_snippet: |
+          import {
+            Controller, Get, Post, Put, Delete, Body, Param, Query,
+            UseGuards, HttpCode, HttpStatus, UseInterceptors,
+            UploadedFiles, BadRequestException,
+          } from '@nestjs/common';
+          import { FileFieldsInterceptor } from '@nestjs/platform-express';
+          import { TenantOnboardingService } from './tenant-onboarding.service';
+          import { TenantSubscriptionService } from './tenant-subscription.service';
+          import { RegisterTenantDto } from './dto/register-tenant.dto';
+          import { UpdateTenantBrandingDto } from './dto/update-tenant-branding.dto';
+          import { VerifyKYBDto } from './dto/verify-kyb.dto';
+          import { ChangeTierDto } from './dto/change-tier.dto';
+          import { RequirePermissions } from '../iam/decorators/require-permissions.decorator';
+          import { RequireRoles } from '../iam/decorators/require-roles.decorator';
+          import { CurrentUser } from '../iam/decorators/current-user.decorator';
+          import { CurrentTenant } from '../iam/decorators/current-tenant.decorator';
+          import { Public } from '../iam/decorators/public.decorator';
+          import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+          import { PermissionsGuard } from '../iam/guards/permissions.guard';
+
+          @Controller('tenants')
+          export class TenantOnboardingController {
+            constructor(
+              private readonly onboardingService: TenantOnboardingService,
+              private readonly subscriptionService: TenantSubscriptionService,
+            ) {}
+
+            // ═══════════════════════════════════════════════════════════════
+            // PUBLIC — Self-Service Registration
+            // ═══════════════════════════════════════════════════════════════
+
+            @Post('register')
+            @Public()
+            @UseInterceptors(FileFieldsInterceptor([
+              { name: 'documents', maxCount: 10 },
+            ]))
+            async registerTenant(
+              @Body() dto: RegisterTenantDto,
+              @UploadedFiles() files: { documents?: Express.Multer.File[] },
+            ) {
+              if (!files?.documents?.length) {
+                throw new BadRequestException('Minimal satu dokumen KYB harus diunggah');
+              }
+              return this.onboardingService.registerTenant(dto, files.documents);
+            }
+
+            @Get('check-code/:code')
+            @Public()
+            async checkTenantCode(@Param('code') code: string) {
+              const available = await this.onboardingService.isTenantCodeAvailable(code);
+              return { available };
+            }
+
+            // ═══════════════════════════════════════════════════════════════
+            // TENANT OWNER — Self-Service Configuration
+            // ═══════════════════════════════════════════════════════════════
+
+            @Get('my-profile')
+            @UseGuards(JwtAuthGuard, PermissionsGuard)
+            @RequirePermissions('tenant.read')
+            async getMyTenantProfile(@CurrentTenant() tenantId: string) {
+              return this.onboardingService.getTenantById(tenantId);
+            }
+
+            @Put('my-branding')
+            @UseGuards(JwtAuthGuard, PermissionsGuard)
+            @RequirePermissions('tenant.update')
+            async updateBranding(
+              @CurrentTenant() tenantId: string,
+              @Body() dto: UpdateTenantBrandingDto,
+            ) {
+              return this.onboardingService.updateBranding(tenantId, dto);
+            }
+
+            @Get('my-features')
+            @UseGuards(JwtAuthGuard, PermissionsGuard)
+            async getMyFeatures(@CurrentTenant() tenantId: string) {
+              return this.subscriptionService.getTenantFeatures(tenantId);
+            }
+
+            @Get('my-subscription')
+            @UseGuards(JwtAuthGuard, PermissionsGuard)
+            async getMySubscription(@CurrentTenant() tenantId: string) {
+              return this.subscriptionService.getTenantSubscription(tenantId);
+            }
+
+            // ═══════════════════════════════════════════════════════════════
+            // SUPER ADMIN — Tenant Management
+            // ═══════════════════════════════════════════════════════════════
+
+            @Get()
+            @UseGuards(JwtAuthGuard, PermissionsGuard)
+            @RequireRoles('super_admin')
+            async listTenants(
+              @Query('status') status?: string,
+              @Query('kyb_status') kybStatus?: string,
+              @Query('tier') tier?: string,
+              @Query('search') search?: string,
+              @Query('page') page = 1,
+              @Query('limit') limit = 20,
+            ) {
+              return this.onboardingService.listTenants({ status, kybStatus, tier, search, page, limit });
+            }
+
+            @Get(':id')
+            @UseGuards(JwtAuthGuard, PermissionsGuard)
+            @RequireRoles('super_admin', 'saas_support_agent')
+            async getTenantDetail(@Param('id') id: string) {
+              return this.onboardingService.getTenantById(id);
+            }
+
+            // ─── KYB Verification ───
+
+            @Post(':id/verify-kyb')
+            @UseGuards(JwtAuthGuard, PermissionsGuard)
+            @RequireRoles('super_admin')
+            async verifyKYB(
+              @Param('id') tenantId: string,
+              @Body() dto: VerifyKYBDto,
+              @CurrentUser('id') userId: string,
+            ) {
+              return this.onboardingService.verifyKYB(tenantId, dto, userId);
+            }
+
+            @Get(':id/kyb-documents')
+            @UseGuards(JwtAuthGuard, PermissionsGuard)
+            @RequireRoles('super_admin', 'saas_support_agent')
+            async getKYBDocuments(@Param('id') tenantId: string) {
+              return this.onboardingService.getKYBDocuments(tenantId);
+            }
+
+            // ─── Subscription Management ───
+
+            @Put(':id/subscription/tier')
+            @UseGuards(JwtAuthGuard, PermissionsGuard)
+            @RequireRoles('super_admin', 'saas_billing_admin')
+            async changeTier(
+              @Param('id') tenantId: string,
+              @Body() dto: ChangeTierDto,
+              @CurrentUser('id') userId: string,
+            ) {
+              return this.subscriptionService.changeTier(tenantId, dto, userId);
+            }
+
+            @Post(':id/subscription/activate')
+            @UseGuards(JwtAuthGuard, PermissionsGuard)
+            @RequireRoles('super_admin', 'saas_billing_admin')
+            async activateSubscription(
+              @Param('id') tenantId: string,
+              @CurrentUser('id') userId: string,
+            ) {
+              return this.subscriptionService.activateSubscription(tenantId, userId);
+            }
+
+            // ─── Tenant Status ───
+
+            @Post(':id/suspend')
+            @UseGuards(JwtAuthGuard, PermissionsGuard)
+            @RequireRoles('super_admin')
+            @HttpCode(HttpStatus.OK)
+            async suspendTenant(
+              @Param('id') tenantId: string,
+              @Body('reason') reason: string,
+              @CurrentUser('id') userId: string,
+            ) {
+              return this.onboardingService.suspendTenant(tenantId, reason, userId);
+            }
+
+            @Post(':id/activate')
+            @UseGuards(JwtAuthGuard, PermissionsGuard)
+            @RequireRoles('super_admin')
+            @HttpCode(HttpStatus.OK)
+            async activateTenant(
+              @Param('id') tenantId: string,
+              @CurrentUser('id') userId: string,
+            ) {
+              return this.onboardingService.activateTenant(tenantId, userId);
+            }
+          }
+
+      # ─── Services ───
+      - file_name: "tenant-onboarding.service.ts"
+        type: "Service"
+        description: >
+          Core business logic untuk tenant onboarding: validasi tenant_code
+          uniqueness, upload dokumen KYB ke object storage (S3/MinIO), verifikasi
+          KYB oleh Super Admin, white-label branding configuration, dan tenant
+          status management (suspend/activate). Saat tenant baru di-approve,
+          service ini juga meng-copy default roles dan membuat tenant_owner user.
+        code_snippet: |
+          import {
+            Injectable, BadRequestException, NotFoundException,
+            ConflictException, ForbiddenException, Logger,
+          } from '@nestjs/common';
+          import { InjectRepository } from '@nestjs/typeorm';
+          import { Repository } from 'typeorm';
+          import { Tenant } from './entities/tenant.entity';
+          import { TenantKYBDocument } from './entities/tenant-kyb-document.entity';
+          import { User } from '../users/entities/user.entity';
+          import { AuditLog } from '../audit/entities/audit-log.entity';
+          import { RegisterTenantDto } from './dto/register-tenant.dto';
+          import { UpdateTenantBrandingDto } from './dto/update-tenant-branding.dto';
+          import { VerifyKYBDto } from './dto/verify-kyb.dto';
+          import { RoleManagementService } from '../iam/services/role-management.service';
+          import { MailService } from '../mail/mail.service';
+          import { StorageService } from '../storage/storage.service';
+          import { ConfigService } from '@nestjs/config';
+          import { ulid } from 'ulid';
+
+          @Injectable()
+          export class TenantOnboardingService {
+            private readonly logger = new Logger(TenantOnboardingService.name);
+
+            constructor(
+              @InjectRepository(Tenant)
+              private readonly tenantRepo: Repository<Tenant>,
+              @InjectRepository(TenantKYBDocument)
+              private readonly kybDocRepo: Repository<TenantKYBDocument>,
+              @InjectRepository(User)
+              private readonly userRepo: Repository<User>,
+              @InjectRepository(AuditLog)
+              private readonly auditRepo: Repository<AuditLog>,
+              private readonly roleService: RoleManagementService,
+              private readonly mailService: MailService,
+              private readonly storageService: StorageService,
+              private readonly configService: ConfigService,
+            ) {}
+
+            // ═══════════════════════════════════════════════════════════════
+            // SELF-SERVICE REGISTRATION
+            // ═══════════════════════════════════════════════════════════════
+
+            async registerTenant(dto: RegisterTenantDto, documents: Express.Multer.File[]) {
+              // Validate tenant_code uniqueness
+              const existing = await this.tenantRepo.findOne({
+                where: { tenant_code: dto.tenant_code },
+              });
+              if (existing) {
+                throw new ConflictException('Kode tenant sudah digunakan');
+              }
+
+              // Validate owner email not already a tenant owner elsewhere
+              const existingOwner = await this.userRepo.findOne({
+                where: { email: dto.owner_email.toLowerCase().trim() },
+              });
+              if (existingOwner?.tenant_id) {
+                throw new ConflictException('Email owner sudah terdaftar di tenant lain');
+              }
+
+              // Calculate trial period
+              const trialDays = this.configService.get<number>('TENANT_TRIAL_DAYS', 14);
+              const trialEndsAt = new Date();
+              trialEndsAt.setDate(trialEndsAt.getDate() + trialDays);
+
+              // Create tenant
+              const tenant = this.tenantRepo.create({
+                id: ulid(),
+                tenant_code: dto.tenant_code.toLowerCase().trim(),
+                legal_name: dto.legal_name,
+                business_type: dto.business_type,
+                tax_id: dto.tax_id,
+                kyb_status: 'pending',
+                subscription_tier: 'starter',
+                subscription_status: 'trial',
+                trial_ends_at: trialEndsAt,
+                contact_email: dto.contact_email,
+                contact_phone: dto.contact_phone,
+                address_line: dto.address_line,
+                city: dto.city,
+                province: dto.province,
+                country: dto.country ?? 'ID',
+              });
+
+              const savedTenant = await this.tenantRepo.save(tenant);
+
+              // Upload KYB documents
+              const kybDocs: TenantKYBDocument[] = [];
+              for (const file of documents) {
+                const fileUrl = await this.storageService.uploadFile(
+                  `tenants/${savedTenant.id}/kyb/${file.originalname}`,
+                  file.buffer,
+                  file.mimetype,
+                );
+
+                kybDocs.push(this.kybDocRepo.create({
+                  id: ulid(),
+                  tenant_id: savedTenant.id,
+                  document_type: this.inferDocumentType(file.originalname),
+                  file_url: fileUrl,
+                  file_name: file.originalname,
+                }));
+              }
+              await this.kybDocRepo.save(kybDocs);
+
+              // Create tenant_owner user (inactive until KYB approved)
+              const ownerUser = this.userRepo.create({
+                id: ulid(),
+                tenant_id: savedTenant.id,
+                email: dto.owner_email.toLowerCase().trim(),
+                full_name: dto.owner_full_name,
+                phone_e164: dto.owner_phone,
+                status: 'active',
+                // Password will be set via invitation email
+              });
+              const savedOwner = await this.userRepo.save(ownerUser);
+
+              // Send invitation email to owner
+              await this.mailService.sendTenantRegistrationConfirmation(
+                dto.owner_email,
+                dto.owner_full_name,
+                savedTenant.legal_name,
+              );
+
+              // Notify Super Admin about new registration
+              await this.mailService.sendNewTenantNotificationToSuperAdmin(savedTenant);
+
+              // Audit log
+              await this.createAuditLog(
+                savedOwner.id, savedTenant.id,
+                'tenant.register', 'Tenant', savedTenant.id,
+                null, { legal_name: savedTenant.legal_name, tenant_code: savedTenant.tenant_code },
+              );
+
+              this.logger.log(`New tenant registered: ${savedTenant.tenant_code} (${savedTenant.id})`);
+
+              return {
+                message: 'Pendaftaran berhasil. Tim kami akan memverifikasi dokumen Anda dalam 1-2 hari kerja.',
+                tenant_id: savedTenant.id,
+                tenant_code: savedTenant.tenant_code,
+              };
+            }
+
+            async isTenantCodeAvailable(code: string): Promise<boolean> {
+              const existing = await this.tenantRepo.findOne({
+                where: { tenant_code: code.toLowerCase().trim() },
+              });
+              return !existing;
+            }
+
+            // ═══════════════════════════════════════════════════════════════
+            // TENANT PROFILE & BRANDING
+            // ═══════════════════════════════════════════════════════════════
+
+            async getTenantById(id: string): Promise<Tenant> {
+              const tenant = await this.tenantRepo.findOne({
+                where: { id },
+                relations: ['kyb_documents'],
+              });
+              if (!tenant) throw new NotFoundException('Tenant tidak ditemukan');
+              return tenant;
+            }
+
+            async updateBranding(tenantId: string, dto: UpdateTenantBrandingDto) {
+              const tenant = await this.getTenantById(tenantId);
+
+              // Validate custom domain if provided
+              if (dto.white_label_custom_domain) {
+                const domainExists = await this.tenantRepo.findOne({
+                  where: { white_label_custom_domain: dto.white_label_custom_domain },
+                });
+                if (domainExists && domainExists.id !== tenantId) {
+                  throw new ConflictException('Custom domain sudah digunakan tenant lain');
+                }
+              }
+
+              await this.tenantRepo.update(tenantId, {
+                white_label_logo_url: dto.white_label_logo_url ?? tenant.white_label_logo_url,
+                white_label_primary_color: dto.white_label_primary_color ?? tenant.white_label_primary_color,
+                white_label_custom_domain: dto.white_label_custom_domain ?? tenant.white_label_custom_domain,
+              });
+
+              return this.getTenantById(tenantId);
+            }
+
+            // ═══════════════════════════════════════════════════════════════
+            // KYB VERIFICATION
+            // ═══════════════════════════════════════════════════════════════
+
+            async verifyKYB(tenantId: string, dto: VerifyKYBDto, verifiedBy: string) {
+              const tenant = await this.getTenantById(tenantId);
+
+              if (tenant.kyb_status !== 'pending') {
+                throw new BadRequestException(`KYB sudah di-${tenant.kyb_status === 'approved' ? 'setujui' : 'tolak'} sebelumnya`);
+              }
+
+              if (dto.status === 'approved') {
+                await this.tenantRepo.update(tenantId, {
+                  kyb_status: 'approved',
+                  kyb_rejection_reason: null,
+                  subscription_status: 'trial',
+                });
+
+                // Copy default roles to new tenant
+                await this.roleService.copyDefaultRolesToTenant(tenantId);
+
+                // Assign tenant_owner role to the owner user
+                const ownerUser = await this.userRepo.findOne({
+                  where: { tenant_id: tenantId },
+                  order: { created_at: 'ASC' },
+                });
+
+                if (ownerUser) {
+                  const tenantOwnerRole = await this.roleService.findRoleByCode(tenantId, 'tenant_owner');
+                  if (tenantOwnerRole) {
+                    await this.roleService.assignRoleToUser(
+                      { user_id: ownerUser.id, role_id: tenantOwnerRole.id },
+                      verifiedBy,
+                    );
+                  }
+
+                  // Send approval email with setup instructions
+                  await this.mailService.sendKYBApproved(ownerUser.email, tenant.legal_name);
+                }
+              } else {
+                await this.tenantRepo.update(tenantId, {
+                  kyb_status: 'rejected',
+                  kyb_rejection_reason: dto.rejection_reason,
+                });
+
+                // Notify owner about rejection
+                const ownerUser = await this.userRepo.findOne({
+                  where: { tenant_id: tenantId },
+                  order: { created_at: 'ASC' },
+                });
+                if (ownerUser) {
+                  await this.mailService.sendKYBRejected(
+                    ownerUser.email,
+                    tenant.legal_name,
+                    dto.rejection_reason ?? '',
+                  );
+                }
+              }
+
+              // Update verified_by on all KYB documents
+              await this.kybDocRepo.update(
+                { tenant_id: tenantId, verified_by: null as any },
+                { verified_by: verifiedBy, verified_at: new Date() },
+              );
+
+              await this.createAuditLog(
+                verifiedBy, tenantId,
+                `tenant.kyb_${dto.status}`, 'Tenant', tenantId,
+                { kyb_status: 'pending' }, { kyb_status: dto.status, reason: dto.rejection_reason },
+              );
+
+              return this.getTenantById(tenantId);
+            }
+
+            async getKYBDocuments(tenantId: string) {
+              return this.kybDocRepo.find({
+                where: { tenant_id: tenantId },
+                order: { created_at: 'ASC' },
+              });
+            }
+
+            // ═══════════════════════════════════════════════════════════════
+            // TENANT STATUS MANAGEMENT
+            // ═══════════════════════════════════════════════════════════════
+
+            async suspendTenant(tenantId: string, reason: string, suspendedBy: string) {
+              const tenant = await this.getTenantById(tenantId);
+
+              if (tenant.subscription_status === 'suspended') {
+                throw new BadRequestException('Tenant sudah dalam status suspended');
+              }
+
+              await this.tenantRepo.update(tenantId, {
+                subscription_status: 'suspended',
+              });
+
+              // Suspend all tenant users
+              await this.userRepo.update(
+                { tenant_id: tenantId },
+                { status: 'suspended' },
+              );
+
+              await this.createAuditLog(
+                suspendedBy, tenantId,
+                'tenant.suspend', 'Tenant', tenantId,
+                { subscription_status: tenant.subscription_status },
+                { subscription_status: 'suspended', reason },
+              );
+
+              this.logger.warn(`Tenant ${tenant.tenant_code} suspended by ${suspendedBy}: ${reason}`);
+              return { message: 'Tenant berhasil di-suspend', reason };
+            }
+
+            async activateTenant(tenantId: string, activatedBy: string) {
+              const tenant = await this.getTenantById(tenantId);
+
+              if (tenant.subscription_status !== 'suspended') {
+                throw new BadRequestException('Tenant tidak dalam status suspended');
+              }
+
+              await this.tenantRepo.update(tenantId, {
+                subscription_status: 'active',
+              });
+
+              // Reactivate all tenant users
+              await this.userRepo.update(
+                { tenant_id: tenantId, status: 'suspended' },
+                { status: 'active' },
+              );
+
+              await this.createAuditLog(
+                activatedBy, tenantId,
+                'tenant.activate', 'Tenant', tenantId,
+                { subscription_status: 'suspended' },
+                { subscription_status: 'active' },
+              );
+
+              return { message: 'Tenant berhasil diaktifkan kembali' };
+            }
+
+            // ═══════════════════════════════════════════════════════════════
+            // LISTING (Super Admin)
+            // ═══════════════════════════════════════════════════════════════
+
+            async listTenants(filters: {
+              status?: string;
+              kybStatus?: string;
+              tier?: string;
+              search?: string;
+              page: number;
+              limit: number;
+            }) {
+              const qb = this.tenantRepo.createQueryBuilder('t');
+
+              if (filters.status) {
+                qb.andWhere('t.subscription_status = :status', { status: filters.status });
+              }
+              if (filters.kybStatus) {
+                qb.andWhere('t.kyb_status = :kybStatus', { kybStatus: filters.kybStatus });
+              }
+              if (filters.tier) {
+                qb.andWhere('t.subscription_tier = :tier', { tier: filters.tier });
+              }
+              if (filters.search) {
+                qb.andWhere(
+                  '(t.legal_name ILIKE :search OR t.tenant_code ILIKE :search OR t.contact_email ILIKE :search)',
+                  { search: `%${filters.search}%` },
+                );
+              }
+
+              qb.orderBy('t.created_at', 'DESC')
+                .skip((filters.page - 1) * filters.limit)
+                .take(filters.limit);
+
+              const [data, total] = await qb.getManyAndCount();
+
+              return {
+                data,
+                meta: {
+                  total,
+                  page: filters.page,
+                  limit: filters.limit,
+                  totalPages: Math.ceil(total / filters.limit),
+                },
+              };
+            }
+
+            // ═══════════════════════════════════════════════════════════════
+            // HELPERS
+            // ═══════════════════════════════════════════════════════════════
+
+            private inferDocumentType(fileName: string): string {
+              const name = fileName.toLowerCase();
+              if (name.includes('nib')) return 'nib';
+              if (name.includes('siup')) return 'siup';
+              if (name.includes('akta')) return 'akta_pendirian';
+              if (name.includes('ktp')) return 'ktp_direktur';
+              if (name.includes('npwp')) return 'npwp_perusahaan';
+              return 'lainnya';
+            }
+
+            private async createAuditLog(
+              userId: string, tenantId: string | null,
+              action: string, resourceType: string, resourceId: string,
+              oldValues: any, newValues: any,
+            ) {
+              await this.auditRepo.save(this.auditRepo.create({
+                user_id: userId,
+                tenant_id: tenantId,
+                action,
+                resource_type: resourceType,
+                resource_id: resourceId,
+                old_values: oldValues ? JSON.parse(JSON.stringify(oldValues)) : null,
+                new_values: newValues ? JSON.parse(JSON.stringify(newValues)) : null,
+              }));
+            }
+          }
+
+      - file_name: "tenant-subscription.service.ts"
+        type: "Service"
+        description: >
+          Service untuk manajemen subscription tenant: change tier, aktivasi
+          subscription, trial/grace period management, feature flag checking,
+          dan auto-suspend tenant yang melewati grace period (via cron scheduler).
+        code_snippet: |
+          import {
+            Injectable, BadRequestException, NotFoundException, Logger,
+          } from '@nestjs/common';
+          import { InjectRepository } from '@nestjs/typeorm';
+          import { Repository } from 'typeorm';
+          import { Cron, CronExpression } from '@nestjs/schedule';
+          import { Tenant } from './entities/tenant.entity';
+          import { FeatureFlag } from './entities/feature-flag.entity';
+          import { TierFeatureFlag } from './entities/tier-feature-flag.entity';
+          import { SubscriptionInvoice } from './entities/subscription-invoice.entity';
+          import { AuditLog } from '../audit/entities/audit-log.entity';
+          import { ChangeTierDto } from './dto/change-tier.dto';
+          import { MailService } from '../mail/mail.service';
+
+          @Injectable()
+          export class TenantSubscriptionService {
+            private readonly logger = new Logger(TenantSubscriptionService.name);
+
+            constructor(
+              @InjectRepository(Tenant)
+              private readonly tenantRepo: Repository<Tenant>,
+              @InjectRepository(FeatureFlag)
+              private readonly featureFlagRepo: Repository<FeatureFlag>,
+              @InjectRepository(TierFeatureFlag)
+              private readonly tierFeatureFlagRepo: Repository<TierFeatureFlag>,
+              @InjectRepository(SubscriptionInvoice)
+              private readonly invoiceRepo: Repository<SubscriptionInvoice>,
+              @InjectRepository(AuditLog)
+              private readonly auditRepo: Repository<AuditLog>,
+              private readonly mailService: MailService,
+            ) {}
+
+            // ═══════════════════════════════════════════════════════════════
+            // FEATURE FLAGS
+            // ═══════════════════════════════════════════════════════════════
+
+            async getTenantFeatures(tenantId: string): Promise<FeatureFlag[]> {
+              const tenant = await this.tenantRepo.findOneBy({ id: tenantId });
+              if (!tenant) throw new NotFoundException('Tenant tidak ditemukan');
+
+              const tierFeatures = await this.tierFeatureFlagRepo.find({
+                where: { tier: tenant.subscription_tier },
+                relations: ['feature_flag'],
+              });
+
+              return tierFeatures.map(tf => tf.feature_flag);
+            }
+
+            async isFeatureEnabled(tenantId: string, flagCode: string): Promise<boolean> {
+              const features = await this.getTenantFeatures(tenantId);
+              return features.some(f => f.flag_code === flagCode);
+            }
+
+            // ═══════════════════════════════════════════════════════════════
+            // SUBSCRIPTION MANAGEMENT
+            // ═══════════════════════════════════════════════════════════════
+
+            async getTenantSubscription(tenantId: string) {
+              const tenant = await this.tenantRepo.findOne({
+                where: { id: tenantId },
+                select: ['id', 'subscription_tier', 'subscription_status', 'trial_ends_at', 'grace_ends_at'],
+              });
+              if (!tenant) throw new NotFoundException('Tenant tidak ditemukan');
+
+              const invoices = await this.invoiceRepo.find({
+                where: { tenant_id: tenantId },
+                order: { created_at: 'DESC' },
+                take: 12,
+              });
+
+              return { ...tenant, invoices };
+            }
+
+            async changeTier(tenantId: string, dto: ChangeTierDto, changedBy: string) {
+              const tenant = await this.tenantRepo.findOneBy({ id: tenantId });
+              if (!tenant) throw new NotFoundException('Tenant tidak ditemukan');
+
+              const validTiers = ['starter', 'growth', 'enterprise'];
+              if (!validTiers.includes(dto.tier)) {
+                throw new BadRequestException(`Tier tidak valid. Pilihan: ${validTiers.join(', ')}`);
+              }
+
+              const oldTier = tenant.subscription_tier;
+              await this.tenantRepo.update(tenantId, {
+                subscription_tier: dto.tier,
+              });
+
+              await this.createAuditLog(
+                changedBy, tenantId,
+                'tenant.tier_changed', 'Tenant', tenantId,
+                { subscription_tier: oldTier },
+                { subscription_tier: dto.tier },
+              );
+
+              this.logger.log(`Tenant ${tenant.tenant_code} tier changed: ${oldTier} -> ${dto.tier}`);
+              return { message: `Tier berhasil diubah ke ${dto.tier}` };
+            }
+
+            async activateSubscription(tenantId: string, activatedBy: string) {
+              const tenant = await this.tenantRepo.findOneBy({ id: tenantId });
+              if (!tenant) throw new NotFoundException('Tenant tidak ditemukan');
+
+              if (tenant.subscription_status === 'active') {
+                throw new BadRequestException('Subscription sudah aktif');
+              }
+
+              await this.tenantRepo.update(tenantId, {
+                subscription_status: 'active',
+                trial_ends_at: null,
+                grace_ends_at: null,
+              });
+
+              await this.createAuditLog(
+                activatedBy, tenantId,
+                'tenant.subscription_activated', 'Tenant', tenantId,
+                { subscription_status: tenant.subscription_status },
+                { subscription_status: 'active' },
+              );
+
+              return { message: 'Subscription berhasil diaktifkan' };
+            }
+
+            // ═══════════════════════════════════════════════════════════════
+            // SCHEDULED TASKS
+            // ═══════════════════════════════════════════════════════════════
+
+            /**
+             * Cron job: setiap hari jam 01:00 — cek trial & grace expiry.
+             * - Trial expired -> pindah ke grace period (7 hari)
+             * - Grace expired -> suspend tenant
+             */
+            @Cron(CronExpression.EVERY_DAY_AT_1AM)
+            async handleTrialAndGraceExpiry() {
+              const now = new Date();
+
+              // Trial expired -> move to grace
+              const expiredTrials = await this.tenantRepo.find({
+                where: {
+                  subscription_status: 'trial',
+                  trial_ends_at: LessThan(now),
+                },
+              });
+
+              for (const tenant of expiredTrials) {
+                const graceEnds = new Date();
+                graceEnds.setDate(graceEnds.getDate() + 7); // 7 days grace
+
+                await this.tenantRepo.update(tenant.id, {
+                  subscription_status: 'grace',
+                  grace_ends_at: graceEnds,
+                });
+
+                // Notify tenant owner
+                const owner = await this.getTenantOwner(tenant.id);
+                if (owner) {
+                  await this.mailService.sendTrialEnded(owner.email, tenant.legal_name, graceEnds);
+                }
+
+                this.logger.log(`Tenant ${tenant.tenant_code} moved to grace period`);
+              }
+
+              // Grace expired -> suspend
+              const expiredGrace = await this.tenantRepo.find({
+                where: {
+                  subscription_status: 'grace',
+                  grace_ends_at: LessThan(now),
+                },
+              });
+
+              for (const tenant of expiredGrace) {
+                await this.tenantRepo.update(tenant.id, {
+                  subscription_status: 'suspended',
+                });
+
+                // Suspend all tenant users
+                await this.userRepo.update(
+                  { tenant_id: tenant.id },
+                  { status: 'suspended' },
+                );
+
+                this.logger.warn(`Tenant ${tenant.tenant_code} suspended due to grace expiry`);
+              }
+            }
+
+            /**
+             * Cron job: setiap hari jam 08:00 — kirim reminder H-3 grace expiry.
+             */
+            @Cron(CronExpression.EVERY_DAY_AT_8AM)
+            async handleGraceReminder() {
+              const threeDaysFromNow = new Date();
+              threeDaysFromNow.setDate(threeDaysFromNow.getDate() + 3);
+
+              const tenantsInGrace = await this.tenantRepo.find({
+                where: {
+                  subscription_status: 'grace',
+                  grace_ends_at: LessThan(threeDaysFromNow),
+                },
+              });
+
+              for (const tenant of tenantsInGrace) {
+                const owner = await this.getTenantOwner(tenant.id);
+                if (owner) {
+                  await this.mailService.sendGraceExpiryReminder(
+                    owner.email,
+                    tenant.legal_name,
+                    tenant.grace_ends_at!,
+                  );
+                }
+              }
+            }
+
+            // ═══════════════════════════════════════════════════════════════
+            // HELPERS
+            // ═══════════════════════════════════════════════════════════════
+
+            private async getTenantOwner(tenantId: string): Promise<{ email: string } | null> {
+              // Find the first user created for this tenant (the owner)
+              const owner = await this.userRepo.findOne({
+                where: { tenant_id: tenantId },
+                order: { created_at: 'ASC' },
+                select: ['email'],
+              });
+              return owner;
+            }
+
+            private async createAuditLog(
+              userId: string, tenantId: string | null,
+              action: string, resourceType: string, resourceId: string,
+              oldValues: any, newValues: any,
+            ) {
+              await this.auditRepo.save(this.auditRepo.create({
+                user_id: userId,
+                tenant_id: tenantId,
+                action,
+                resource_type: resourceType,
+                resource_id: resourceId,
+                old_values: oldValues ? JSON.parse(JSON.stringify(oldValues)) : null,
+                new_values: newValues ? JSON.parse(JSON.stringify(newValues)) : null,
+              }));
+            }
+          }
+
+      # ─── DTOs ───
+      - file_name: "dto/register-tenant.dto.ts"
+        type: "DTO"
+        description: "DTO untuk self-service tenant registration dengan KYB."
+        code_snippet: |
+          import {
+            IsString, IsEmail, MinLength, MaxLength, IsOptional,
+            IsIn, IsPhoneNumber, Matches,
+          } from 'class-validator';
+          import { ApiProperty } from '@nestjs/swagger';
+
+          export class RegisterTenantDto {
+            @ApiProperty({ example: 'agensi-maju-jaya' })
+            @IsString()
+            @MinLength(3)
+            @MaxLength(50)
+            @Matches(/^[a-z0-9-]+$/, { message: 'Kode tenant hanya boleh lowercase, angka, dan dash' })
+            tenant_code: string;
+
+            @ApiProperty({ example: 'PT Agensi Maju Jaya' })
+            @IsString()
+            @MinLength(3)
+            @MaxLength(200)
+            legal_name: string;
+
+            @ApiProperty({
+              enum: ['travel_agency', 'bus_operator', 'shuttle_operator', 'car_rental', 'hotel_aggregator', 'mixed'],
+            })
+            @IsString()
+            @IsIn(['travel_agency', 'bus_operator', 'shuttle_operator', 'car_rental', 'hotel_aggregator', 'mixed'])
+            business_type: string;
+
+            @ApiProperty({ required: false, example: '12.345.678.9-012.000' })
+            @IsOptional()
+            @IsString()
+            @MaxLength(50)
+            tax_id?: string;
+
+            @ApiProperty({ example: 'owner@agensi.com' })
+            @IsEmail()
+            @MaxLength(320)
+            owner_email: string;
+
+            @ApiProperty({ example: 'Budi Santoso' })
+            @IsString()
+            @MinLength(2)
+            @MaxLength(200)
+            owner_full_name: string;
+
+            @ApiProperty({ required: false, example: '+6281234567890' })
+            @IsOptional()
+            @IsPhoneNumber()
+            @MaxLength(16)
+            owner_phone?: string;
+
+            @ApiProperty({ example: 'contact@agensi.com' })
+            @IsEmail()
+            @MaxLength(320)
+            contact_email: string;
+
+            @ApiProperty({ required: false, example: '+6281234567890' })
+            @IsOptional()
+            @IsPhoneNumber()
+            @MaxLength(16)
+            contact_phone?: string;
+
+            @ApiProperty({ required: false })
+            @IsOptional()
+            @IsString()
+            address_line?: string;
+
+            @ApiProperty({ required: false })
+            @IsOptional()
+            @IsString()
+            @MaxLength(100)
+            city?: string;
+
+            @ApiProperty({ required: false })
+            @IsOptional()
+            @IsString()
+            @MaxLength(100)
+            province?: string;
+
+            @ApiProperty({ required: false, default: 'ID' })
+            @IsOptional()
+            @IsString()
+            @Length(2, 2)
+            country?: string;
+          }
+
+      - file_name: "dto/update-tenant-branding.dto.ts"
+        type: "DTO"
+        description: "DTO untuk update white-label branding tenant."
+        code_snippet: |
+          import { IsString, IsOptional, MaxLength, Matches } from 'class-validator';
+          import { ApiProperty } from '@nestjs/swagger';
+
+          export class UpdateTenantBrandingDto {
+            @ApiProperty({ required: false })
+            @IsOptional()
+            @IsString()
+            @MaxLength(500)
+            white_label_logo_url?: string;
+
+            @ApiProperty({ required: false, example: '#FF5733' })
+            @IsOptional()
+            @IsString()
+            @MaxLength(7)
+            @Matches(/^#[0-9A-Fa-f]{6}$/, { message: 'Format hex color tidak valid' })
+            white_label_primary_color?: string;
+
+            @ApiProperty({ required: false, example: 'booking.agensi-abc.com' })
+            @IsOptional()
+            @IsString()
+            @MaxLength(253)
+            white_label_custom_domain?: string;
+          }
+
+      - file_name: "dto/verify-kyb.dto.ts"
+        type: "DTO"
+        description: "DTO untuk verifikasi KYB oleh Super Admin."
+        code_snippet: |
+          import { IsString, IsIn, IsOptional } from 'class-validator';
+          import { ApiProperty } from '@nestjs/swagger';
+
+          export class VerifyKYBDto {
+            @ApiProperty({ enum: ['approved', 'rejected'] })
+            @IsString()
+            @IsIn(['approved', 'rejected'])
+            status: 'approved' | 'rejected';
+
+            @ApiProperty({ required: false, description: 'Alasan penolakan (wajib jika rejected)' })
+            @IsOptional()
+            @IsString()
+            rejection_reason?: string;
+          }
+
+      - file_name: "dto/change-tier.dto.ts"
+        type: "DTO"
+        description: "DTO untuk mengubah subscription tier tenant."
+        code_snippet: |
+          import { IsString, IsIn } from 'class-validator';
+          import { ApiProperty } from '@nestjs/swagger';
+
+          export class ChangeTierDto {
+            @ApiProperty({ enum: ['starter', 'growth', 'enterprise'] })
+            @IsString()
+            @IsIn(['starter', 'growth', 'enterprise'])
+            tier: 'starter' | 'growth' | 'enterprise';
+          }
+
+      # ─── Module ───
+      - file_name: "tenant.module.ts"
+        type: "Module"
+        description: >
+          NestJS module untuk multi-tenancy management. Mengimpor TypeOrmModule
+          untuk entity Tenant, TenantKYBDocument, FeatureFlag, TierFeatureFlag,
+          SubscriptionInvoice, User, AuditLog. Mengekspor TenantContextService
+          untuk digunakan modul lain.
+        code_snippet: |
+          import { Module } from '@nestjs/common';
+          import { TypeOrmModule } from '@nestjs/typeorm';
+          import { ScheduleModule } from '@nestjs/schedule';
+          import { TenantOnboardingController } from './tenant-onboarding.controller';
+          import { TenantOnboardingService } from './tenant-onboarding.service';
+          import { TenantSubscriptionService } from './tenant-subscription.service';
+          import { Tenant } from './entities/tenant.entity';
+          import { TenantKYBDocument } from './entities/tenant-kyb-document.entity';
+          import { FeatureFlag } from './entities/feature-flag.entity';
+          import { TierFeatureFlag } from './entities/tier-feature-flag.entity';
+          import { SubscriptionInvoice } from './entities/subscription-invoice.entity';
+          import { User } from '../users/entities/user.entity';
+          import { AuditLog } from '../audit/entities/audit-log.entity';
+          import { IamModule } from '../iam/iam.module';
+          import { MailModule } from '../mail/mail.module';
+          import { StorageModule } from '../storage/storage.module';
+
+          @Module({
+            imports: [
+              TypeOrmModule.forFeature([
+                Tenant, TenantKYBDocument, FeatureFlag,
+                TierFeatureFlag, SubscriptionInvoice, User, AuditLog,
+              ]),
+              ScheduleModule.forRoot(),
+              IamModule,
+              MailModule,
+              StorageModule,
+            ],
+            controllers: [TenantOnboardingController],
+            providers: [TenantOnboardingService, TenantSubscriptionService],
+            exports: [TenantOnboardingService, TenantSubscriptionService],
+          })
+          export class TenantModule {}

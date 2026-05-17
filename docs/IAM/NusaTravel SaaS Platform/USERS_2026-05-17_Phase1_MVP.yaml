@@ -1,0 +1,726 @@
+architecture_overview:
+  description: >
+    UsersModule menangani manajemen user di NusaTravel SaaS Platform. Mencakup
+    profil user, CRUD user (oleh tenant_owner/super_admin), user invitation flow,
+    user status management (suspend/activate/lock/unlock), dan user search.
+    Modul ini terintegrasi erat dengan AuthModule (untuk autentikasi) dan
+    IamModule (untuk role assignment). Entity User adalah global identity account
+    yang digunakan oleh semua persona: SaaS staff (tenant_id=NULL), tenant user,
+    dan end customer.
+
+modules:
+  - module_name: "UsersModule"
+    path: "src/modules/users"
+    components:
+      # ─── Controller ───
+      - file_name: "users.controller.ts"
+        type: "Controller"
+        description: >
+          REST endpoints untuk manajemen user: get profile, update profile,
+          list users (dengan filter & pagination), invite user baru, update
+          user status (suspend/activate/lock/unlock), dan delete user (soft).
+        code_snippet: |
+          import {
+            Controller, Get, Post, Put, Delete, Body, Param, Query,
+            UseGuards, HttpCode, HttpStatus,
+          } from '@nestjs/common';
+          import { UsersService } from './users.service';
+          import { UpdateProfileDto } from './dto/update-profile.dto';
+          import { InviteUserDto } from './dto/invite-user.dto';
+          import { UpdateUserStatusDto } from './dto/update-user-status.dto';
+          import { RequirePermissions } from '../iam/decorators/require-permissions.decorator';
+          import { RequireRoles } from '../iam/decorators/require-roles.decorator';
+          import { CurrentUser } from '../iam/decorators/current-user.decorator';
+          import { CurrentTenant } from '../iam/decorators/current-tenant.decorator';
+          import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+          import { PermissionsGuard } from '../iam/guards/permissions.guard';
+
+          @Controller('users')
+          @UseGuards(JwtAuthGuard, PermissionsGuard)
+          export class UsersController {
+            constructor(private readonly usersService: UsersService) {}
+
+            // ═══════════════════════════════════════════════════════════════
+            // CURRENT USER PROFILE
+            // ═══════════════════════════════════════════════════════════════
+
+            @Get('me')
+            async getMyProfile(@CurrentUser('id') userId: string) {
+              return this.usersService.getUserById(userId);
+            }
+
+            @Put('me')
+            async updateMyProfile(
+              @CurrentUser('id') userId: string,
+              @Body() dto: UpdateProfileDto,
+            ) {
+              return this.usersService.updateProfile(userId, dto);
+            }
+
+            @Delete('me')
+            @HttpCode(HttpStatus.OK)
+            async deleteMyAccount(
+              @CurrentUser('id') userId: string,
+              @Body('password') password: string,
+            ) {
+              return this.usersService.deleteOwnAccount(userId, password);
+            }
+
+            // ═══════════════════════════════════════════════════════════════
+            // USER MANAGEMENT (Tenant Owner / Super Admin)
+            // ═══════════════════════════════════════════════════════════════
+
+            @Get()
+            @RequirePermissions('user.read')
+            async listUsers(
+              @CurrentTenant() tenantId: string | null,
+              @Query('status') status?: string,
+              @Query('role') role?: string,
+              @Query('search') search?: string,
+              @Query('page') page = 1,
+              @Query('limit') limit = 20,
+            ) {
+              return this.usersService.listUsers({ tenantId, status, role, search, page, limit });
+            }
+
+            @Get(':id')
+            @RequirePermissions('user.read')
+            async getUser(@Param('id') id: string) {
+              return this.usersService.getUserById(id);
+            }
+
+            @Post('invite')
+            @RequirePermissions('user.create')
+            async inviteUser(
+              @Body() dto: InviteUserDto,
+              @CurrentTenant() tenantId: string | null,
+              @CurrentUser('id') invitedBy: string,
+            ) {
+              return this.usersService.inviteUser(dto, tenantId, invitedBy);
+            }
+
+            @Put(':id/status')
+            @RequirePermissions('user.manage')
+            async updateUserStatus(
+              @Param('id') userId: string,
+              @Body() dto: UpdateUserStatusDto,
+              @CurrentUser('id') updatedBy: string,
+            ) {
+              return this.usersService.updateUserStatus(userId, dto, updatedBy);
+            }
+
+            @Post(':id/unlock')
+            @RequirePermissions('user.manage')
+            @HttpCode(HttpStatus.OK)
+            async unlockUser(
+              @Param('id') userId: string,
+              @CurrentUser('id') unlockedBy: string,
+            ) {
+              return this.usersService.unlockUser(userId, unlockedBy);
+            }
+
+            @Delete(':id')
+            @RequirePermissions('user.manage')
+            @HttpCode(HttpStatus.OK)
+            async deleteUser(
+              @Param('id') userId: string,
+              @CurrentUser('id') deletedBy: string,
+            ) {
+              return this.usersService.softDeleteUser(userId, deletedBy);
+            }
+          }
+
+      # ─── Service ───
+      - file_name: "users.service.ts"
+        type: "Service"
+        description: >
+          Core business logic untuk manajemen user: CRUD user, profile update,
+          user invitation (kirim email setup password), status management
+          (suspend/activate/lock/unlock), soft delete, dan user search dengan
+          filter tenant-scoped.
+        code_snippet: |
+          import {
+            Injectable, BadRequestException, NotFoundException,
+            ConflictException, ForbiddenException, Logger,
+          } from '@nestjs/common';
+          import { InjectRepository } from '@nestjs/typeorm';
+          import { Repository, ILike } from 'typeorm';
+          import * as argon2 from 'argon2';
+          import * as crypto from 'crypto';
+          import { User } from './entities/user.entity';
+          import { UserRole } from '../iam/entities/user-role.entity';
+          import { Role } from '../iam/entities/role.entity';
+          import { AuditLog } from '../audit/entities/audit-log.entity';
+          import { UpdateProfileDto } from './dto/update-profile.dto';
+          import { InviteUserDto } from './dto/invite-user.dto';
+          import { UpdateUserStatusDto } from './dto/update-user-status.dto';
+          import { MailService } from '../mail/mail.service';
+          import { RoleManagementService } from '../iam/services/role-management.service';
+          import { ulid } from 'ulid';
+
+          @Injectable()
+          export class UsersService {
+            private readonly logger = new Logger(UsersService.name);
+
+            constructor(
+              @InjectRepository(User)
+              private readonly userRepo: Repository<User>,
+              @InjectRepository(UserRole)
+              private readonly userRoleRepo: Repository<UserRole>,
+              @InjectRepository(Role)
+              private readonly roleRepo: Repository<Role>,
+              @InjectRepository(AuditLog)
+              private readonly auditRepo: Repository<AuditLog>,
+              private readonly mailService: MailService,
+              private readonly roleService: RoleManagementService,
+            ) {}
+
+            // ═══════════════════════════════════════════════════════════════
+            // PROFILE
+            // ═══════════════════════════════════════════════════════════════
+
+            async getUserById(id: string): Promise<Omit<User, 'password_hash' | 'two_factor_secret'>> {
+              const user = await this.userRepo.findOne({
+                where: { id },
+                relations: ['user_roles', 'user_roles.role'],
+              });
+              if (!user) throw new NotFoundException('User tidak ditemukan');
+
+              const { password_hash, two_factor_secret, ...safe } = user;
+              return safe as any;
+            }
+
+            async updateProfile(userId: string, dto: UpdateProfileDto) {
+              const user = await this.userRepo.findOneBy({ id: userId });
+              if (!user) throw new NotFoundException('User tidak ditemukan');
+
+              // Check phone uniqueness if changing
+              if (dto.phone_e164 && dto.phone_e164 !== user.phone_e164) {
+                const phoneExists = await this.userRepo.findOne({
+                  where: { phone_e164: dto.phone_e164 },
+                });
+                if (phoneExists) {
+                  throw new ConflictException('Nomor telepon sudah digunakan');
+                }
+              }
+
+              await this.userRepo.update(userId, {
+                full_name: dto.full_name ?? user.full_name,
+                phone_e164: dto.phone_e164 ?? user.phone_e164,
+                avatar_url: dto.avatar_url ?? user.avatar_url,
+              });
+
+              await this.createAuditLog(userId, user.tenant_id, 'user.profile_updated', 'User', userId, null, dto);
+              return this.getUserById(userId);
+            }
+
+            async deleteOwnAccount(userId: string, password: string) {
+              const user = await this.userRepo.findOneBy({ id: userId });
+              if (!user) throw new NotFoundException('User tidak ditemukan');
+
+              if (!user.password_hash) {
+                throw new BadRequestException('Akun Google tidak bisa dihapus melalui metode ini');
+              }
+
+              const valid = await argon2.verify(user.password_hash, password);
+              if (!valid) throw new BadRequestException('Password salah');
+
+              await this.userRepo.update(userId, {
+                status: 'deleted',
+                email: `deleted_${userId}@deleted.nusatravel.id`,
+                phone_e164: null,
+                oauth_provider: null,
+                oauth_provider_id: null,
+              });
+
+              await this.createAuditLog(userId, user.tenant_id, 'user.account_deleted', 'User', userId, null, null);
+              return { message: 'Akun berhasil dihapus' };
+            }
+
+            // ═══════════════════════════════════════════════════════════════
+            // USER LISTING
+            // ═══════════════════════════════════════════════════════════════
+
+            async listUsers(filters: {
+              tenantId: string | null;
+              status?: string;
+              role?: string;
+              search?: string;
+              page: number;
+              limit: number;
+            }) {
+              const qb = this.userRepo.createQueryBuilder('u')
+                .leftJoinAndSelect('u.user_roles', 'ur')
+                .leftJoinAndSelect('ur.role', 'r');
+
+              // Tenant isolation
+              if (filters.tenantId) {
+                qb.andWhere('u.tenant_id = :tenantId', { tenantId: filters.tenantId });
+              } else {
+                // SaaS-level: show all users (both SaaS and tenant users)
+              }
+
+              if (filters.status) {
+                qb.andWhere('u.status = :status', { status: filters.status });
+              }
+
+              if (filters.role) {
+                qb.andWhere('r.role_code = :role', { role: filters.role });
+              }
+
+              if (filters.search) {
+                qb.andWhere(
+                  '(u.full_name ILIKE :search OR u.email ILIKE :search OR u.phone_e164 ILIKE :search)',
+                  { search: `%${filters.search}%` },
+                );
+              }
+
+              qb.orderBy('u.created_at', 'DESC')
+                .skip((filters.page - 1) * filters.limit)
+                .take(filters.limit);
+
+              const [data, total] = await qb.getManyAndCount();
+
+              // Sanitize sensitive fields
+              const sanitized = data.map(u => {
+                const { password_hash, two_factor_secret, ...safe } = u;
+                return safe;
+              });
+
+              return {
+                data: sanitized,
+                meta: {
+                  total,
+                  page: filters.page,
+                  limit: filters.limit,
+                  totalPages: Math.ceil(total / filters.limit),
+                },
+              };
+            }
+
+            // ═══════════════════════════════════════════════════════════════
+            // USER INVITATION
+            // ═══════════════════════════════════════════════════════════════
+
+            async inviteUser(dto: InviteUserDto, tenantId: string | null, invitedBy: string) {
+              // Check email uniqueness
+              const existing = await this.userRepo.findOne({
+                where: { email: dto.email.toLowerCase().trim() },
+              });
+              if (existing) {
+                throw new ConflictException('Email sudah terdaftar');
+              }
+
+              // Validate role exists in tenant scope
+              const role = await this.roleRepo.findOne({
+                where: { id: dto.role_id, tenant_id: tenantId },
+              });
+              if (!role) {
+                throw new BadRequestException('Role tidak valid untuk tenant ini');
+              }
+
+              // Create user with temporary password
+              const tempPassword = crypto.randomBytes(16).toString('hex');
+              const user = this.userRepo.create({
+                id: ulid(),
+                tenant_id: tenantId,
+                email: dto.email.toLowerCase().trim(),
+                phone_e164: dto.phone_e164,
+                password_hash: await argon2.hash(tempPassword),
+                full_name: dto.full_name,
+                status: 'active',
+                email_verified_at: null, // Must verify via invitation link
+              });
+
+              const savedUser = await this.userRepo.save(user);
+
+              // Assign role
+              await this.roleService.assignRoleToUser(
+                { user_id: savedUser.id, role_id: dto.role_id },
+                invitedBy,
+              );
+
+              // Send invitation email with setup link
+              const setupToken = crypto.randomBytes(32).toString('hex');
+              // In production: store setupToken with expiry in a separate table
+              await this.mailService.sendUserInvitation(
+                dto.email,
+                dto.full_name,
+                setupToken,
+              );
+
+              await this.createAuditLog(invitedBy, tenantId, 'user.invited', 'User', savedUser.id, null, {
+                email: dto.email,
+                role_id: dto.role_id,
+              });
+
+              this.logger.log(`User invited: ${dto.email} to tenant ${tenantId}`);
+              return { message: 'Undangan berhasil dikirim', user_id: savedUser.id };
+            }
+
+            // ═══════════════════════════════════════════════════════════════
+            // USER STATUS MANAGEMENT
+            // ═══════════════════════════════════════════════════════════════
+
+            async updateUserStatus(userId: string, dto: UpdateUserStatusDto, updatedBy: string) {
+              const user = await this.userRepo.findOneBy({ id: userId });
+              if (!user) throw new NotFoundException('User tidak ditemukan');
+
+              // Prevent self-suspend
+              if (userId === updatedBy && dto.status === 'suspended') {
+                throw new BadRequestException('Tidak dapat men-suspend akun sendiri');
+              }
+
+              // Prevent modifying super_admin
+              const userRoles = await this.userRoleRepo.find({
+                where: { user_id: userId },
+                relations: ['role'],
+              });
+              const isSuperAdmin = userRoles.some(ur => ur.role.role_code === 'super_admin');
+              if (isSuperAdmin) {
+                throw new ForbiddenException('Tidak dapat mengubah status Super Admin');
+              }
+
+              const validStatuses = ['active', 'suspended', 'locked'];
+              if (!validStatuses.includes(dto.status)) {
+                throw new BadRequestException(`Status tidak valid. Pilihan: ${validStatuses.join(', ')}`);
+              }
+
+              const oldStatus = user.status;
+              await this.userRepo.update(userId, {
+                status: dto.status,
+                locked_until: dto.status === 'locked' ? new Date(Date.now() + 30 * 60 * 1000) : null,
+              });
+
+              await this.createAuditLog(updatedBy, user.tenant_id, 'user.status_changed', 'User', userId, { status: oldStatus }, { status: dto.status });
+
+              return { message: `Status user berhasil diubah ke ${dto.status}` };
+            }
+
+            async unlockUser(userId: string, unlockedBy: string) {
+              const user = await this.userRepo.findOneBy({ id: userId });
+              if (!user) throw new NotFoundException('User tidak ditemukan');
+
+              if (user.status !== 'locked') {
+                throw new BadRequestException('User tidak dalam status locked');
+              }
+
+              await this.userRepo.update(userId, {
+                status: 'active',
+                failed_login_attempts: 0,
+                locked_until: null,
+              });
+
+              await this.createAuditLog(unlockedBy, user.tenant_id, 'user.unlocked', 'User', userId, { status: 'locked' }, { status: 'active' });
+              return { message: 'User berhasil di-unlock' };
+            }
+
+            async softDeleteUser(userId: string, deletedBy: string) {
+              const user = await this.userRepo.findOneBy({ id: userId });
+              if (!user) throw new NotFoundException('User tidak ditemukan');
+
+              // Prevent deleting super_admin
+              const userRoles = await this.userRoleRepo.find({
+                where: { user_id: userId },
+                relations: ['role'],
+              });
+              const isSuperAdmin = userRoles.some(ur => ur.role.role_code === 'super_admin');
+              if (isSuperAdmin) {
+                throw new ForbiddenException('Tidak dapat menghapus Super Admin');
+              }
+
+              // Soft delete: anonymize and mark as deleted
+              await this.userRepo.update(userId, {
+                status: 'deleted',
+                email: `deleted_${userId}@deleted.nusatravel.id`,
+                phone_e164: null,
+                password_hash: null,
+                oauth_provider: null,
+                oauth_provider_id: null,
+                two_factor_enabled: false,
+                two_factor_secret: null,
+                two_factor_method: null,
+              });
+
+              // Revoke all roles
+              await this.userRoleRepo.delete({ user_id: userId });
+
+              await this.createAuditLog(deletedBy, user.tenant_id, 'user.deleted', 'User', userId, user, null);
+              return { message: 'User berhasil dihapus' };
+            }
+
+            // ═══════════════════════════════════════════════════════════════
+            // HELPER
+            // ═══════════════════════════════════════════════════════════════
+
+            private async createAuditLog(
+              userId: string, tenantId: string | null,
+              action: string, resourceType: string, resourceId: string,
+              oldValues: any, newValues: any,
+            ) {
+              await this.auditRepo.save(this.auditRepo.create({
+                user_id: userId,
+                tenant_id: tenantId,
+                action,
+                resource_type: resourceType,
+                resource_id: resourceId,
+                old_values: oldValues ? JSON.parse(JSON.stringify(oldValues)) : null,
+                new_values: newValues ? JSON.parse(JSON.stringify(newValues)) : null,
+              }));
+            }
+          }
+
+      # ─── DTOs ───
+      - file_name: "dto/update-profile.dto.ts"
+        type: "DTO"
+        description: "DTO untuk update profil user sendiri."
+        code_snippet: |
+          import { IsString, IsOptional, MaxLength, IsPhoneNumber } from 'class-validator';
+          import { ApiProperty } from '@nestjs/swagger';
+
+          export class UpdateProfileDto {
+            @ApiProperty({ required: false, example: 'Budi Santoso' })
+            @IsOptional()
+            @IsString()
+            @MaxLength(200)
+            full_name?: string;
+
+            @ApiProperty({ required: false, example: '+6281234567890' })
+            @IsOptional()
+            @IsPhoneNumber()
+            @MaxLength(16)
+            phone_e164?: string;
+
+            @ApiProperty({ required: false })
+            @IsOptional()
+            @IsString()
+            @MaxLength(500)
+            avatar_url?: string;
+          }
+
+      - file_name: "dto/invite-user.dto.ts"
+        type: "DTO"
+        description: "DTO untuk mengundang user baru ke tenant."
+        code_snippet: |
+          import { IsString, IsEmail, MinLength, MaxLength, IsOptional, IsPhoneNumber } from 'class-validator';
+          import { ApiProperty } from '@nestjs/swagger';
+
+          export class InviteUserDto {
+            @ApiProperty({ example: 'staff@agensi.com' })
+            @IsEmail()
+            @MaxLength(320)
+            email: string;
+
+            @ApiProperty({ example: 'Siti Rahayu' })
+            @IsString()
+            @MinLength(2)
+            @MaxLength(200)
+            full_name: string;
+
+            @ApiProperty({ description: 'Role ULID yang akan di-assign' })
+            @IsString()
+            role_id: string;
+
+            @ApiProperty({ required: false, example: '+6281234567890' })
+            @IsOptional()
+            @IsPhoneNumber()
+            @MaxLength(16)
+            phone_e164?: string;
+          }
+
+      - file_name: "dto/update-user-status.dto.ts"
+        type: "DTO"
+        description: "DTO untuk mengubah status user (suspend/activate/lock)."
+        code_snippet: |
+          import { IsString, IsIn } from 'class-validator';
+          import { ApiProperty } from '@nestjs/swagger';
+
+          export class UpdateUserStatusDto {
+            @ApiProperty({ enum: ['active', 'suspended', 'locked'] })
+            @IsString()
+            @IsIn(['active', 'suspended', 'locked'])
+            status: 'active' | 'suspended' | 'locked';
+          }
+
+      # ─── Entities ───
+      - file_name: "entities/user.entity.ts"
+        type: "Entity"
+        description: >
+          TypeORM entity untuk tabel users. Global identity account untuk semua
+          persona. tenant_id NULL = SaaS-level user (super_admin, dll).
+          tenant_id berisi = tenant-scoped user. Mencakup kolom untuk password
+          hash, OAuth linking, 2FA config, account lockout, dan email/phone
+          verification.
+        code_snippet: |
+          import {
+            Entity, Column, PrimaryColumn, ManyToOne, OneToMany,
+            JoinColumn, CreateDateColumn, UpdateDateColumn, Index,
+          } from 'typeorm';
+          import { Tenant } from '../../tenant/entities/tenant.entity';
+          import { UserRole } from '../../iam/entities/user-role.entity';
+          import { UserSession } from './user-session.entity';
+          import { AuditLog } from '../../audit/entities/audit-log.entity';
+
+          @Entity('users')
+          export class User {
+            @PrimaryColumn({ type: 'varchar', length: 26 })
+            id: string; // ULID
+
+            @Index()
+            @Column({ type: 'varchar', length: 26, nullable: true })
+            tenant_id: string | null;
+
+            @Column({ type: 'varchar', length: 320, unique: true })
+            email: string;
+
+            @Column({ type: 'varchar', length: 16, unique: true, nullable: true })
+            phone_e164: string | null;
+
+            @Column({ type: 'varchar', length: 255, nullable: true, select: false })
+            password_hash: string | null;
+
+            @Column({ type: 'varchar', length: 200 })
+            full_name: string;
+
+            @Column({ type: 'varchar', length: 500, nullable: true })
+            avatar_url: string | null;
+
+            @Column({ type: 'varchar', length: 20, default: 'active' })
+            status: string; // active | suspended | locked | deleted
+
+            @Column({ type: 'timestamptz', nullable: true })
+            email_verified_at: Date | null;
+
+            @Column({ type: 'timestamptz', nullable: true })
+            phone_verified_at: Date | null;
+
+            @Column({ type: 'int', default: 0 })
+            failed_login_attempts: number;
+
+            @Column({ type: 'timestamptz', nullable: true })
+            locked_until: Date | null;
+
+            @Column({ type: 'timestamptz', nullable: true })
+            last_login_at: Date | null;
+
+            @Column({ type: 'varchar', length: 45, nullable: true })
+            last_login_ip: string | null;
+
+            @Column({ type: 'boolean', default: false })
+            two_factor_enabled: boolean;
+
+            @Column({ type: 'varchar', length: 20, nullable: true })
+            two_factor_method: string | null; // totp | whatsapp_otp
+
+            @Column({ type: 'varchar', length: 255, nullable: true, select: false })
+            two_factor_secret: string | null;
+
+            @Column({ type: 'varchar', length: 20, nullable: true })
+            oauth_provider: string | null; // google
+
+            @Column({ type: 'varchar', length: 255, nullable: true })
+            oauth_provider_id: string | null;
+
+            @CreateDateColumn({ type: 'timestamptz' })
+            created_at: Date;
+
+            @UpdateDateColumn({ type: 'timestamptz' })
+            updated_at: Date;
+
+            // ─── Relations ───
+
+            @ManyToOne(() => Tenant, tenant => tenant.users, { onDelete: 'SET NULL' })
+            @JoinColumn({ name: 'tenant_id' })
+            tenant: Tenant | null;
+
+            @OneToMany(() => UserRole, userRole => userRole.user)
+            user_roles: UserRole[];
+
+            @OneToMany(() => UserSession, session => session.user)
+            sessions: UserSession[];
+
+            @OneToMany(() => AuditLog, auditLog => auditLog.user)
+            audit_logs: AuditLog[];
+          }
+
+      - file_name: "entities/user-session.entity.ts"
+        type: "Entity"
+        description: >
+          TypeORM entity untuk tabel user_sessions. Menyimpan refresh token hash
+          dan metadata sesi (IP, user agent, device info). Digunakan untuk
+          session management dan forced logout.
+        code_snippet: |
+          import {
+            Entity, Column, PrimaryColumn, ManyToOne,
+            JoinColumn, CreateDateColumn, Index,
+          } from 'typeorm';
+          import { User } from './user.entity';
+
+          @Entity('user_sessions')
+          export class UserSession {
+            @PrimaryColumn({ type: 'varchar', length: 26 })
+            id: string; // ULID
+
+            @Index()
+            @Column({ type: 'varchar', length: 26 })
+            user_id: string;
+
+            @Column({ type: 'varchar', length: 255 })
+            refresh_token_hash: string;
+
+            @Column({ type: 'varchar', length: 45, nullable: true })
+            ip_address: string | null;
+
+            @Column({ type: 'varchar', length: 500, nullable: true })
+            user_agent: string | null;
+
+            @Column({ type: 'varchar', length: 300, nullable: true })
+            device_info: string | null;
+
+            @Column({ type: 'timestamptz' })
+            expires_at: Date;
+
+            @Column({ type: 'timestamptz', nullable: true })
+            revoked_at: Date | null;
+
+            @CreateDateColumn({ type: 'timestamptz' })
+            created_at: Date;
+
+            // ─── Relations ───
+
+            @ManyToOne(() => User, user => user.sessions, { onDelete: 'CASCADE' })
+            @JoinColumn({ name: 'user_id' })
+            user: User;
+          }
+
+      # ─── Module ───
+      - file_name: "users.module.ts"
+        type: "Module"
+        description: >
+          NestJS module untuk manajemen user. Mengimpor TypeOrmModule untuk
+          entity User, UserSession, UserRole, Role, AuditLog. Mengekspor
+          UsersService untuk digunakan modul lain (misal AuthModule).
+        code_snippet: |
+          import { Module } from '@nestjs/common';
+          import { TypeOrmModule } from '@nestjs/typeorm';
+          import { UsersController } from './users.controller';
+          import { UsersService } from './users.service';
+          import { User } from './entities/user.entity';
+          import { UserSession } from './entities/user-session.entity';
+          import { UserRole } from '../iam/entities/user-role.entity';
+          import { Role } from '../iam/entities/role.entity';
+          import { AuditLog } from '../audit/entities/audit-log.entity';
+          import { MailModule } from '../mail/mail.module';
+          import { IamModule } from '../iam/iam.module';
+
+          @Module({
+            imports: [
+              TypeOrmModule.forFeature([User, UserSession, UserRole, Role, AuditLog]),
+              MailModule,
+              IamModule,
+            ],
+            controllers: [UsersController],
+            providers: [UsersService],
+            exports: [UsersService],
+          })
+          export class UsersModule {}
